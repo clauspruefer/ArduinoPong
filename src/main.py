@@ -11,6 +11,9 @@ The display is assumed to be a 128×64 I²C OLED wired to I2C bus 0
 (SCL = Pin 22, SDA = Pin 21 – adjust SCL_PIN / SDA_PIN below to match
 your hardware).
 
+The ball is drawn as a filled square (side = PUCK_RADIUS * 2) rather
+than a circle for simplicity and speed on constrained hardware.
+
 Input / controls
 ----------------
 Player movement is provided as a single JSON object delivered per frame
@@ -28,6 +31,12 @@ Example frame inputs
   {"player1": "up",   "player2": "down"}
   {"player1": "none", "player2": "up"}
   {"quit": true}
+
+ASCII debug output
+------------------
+Set ASCII_DEBUG = True (below) to print a scaled ASCII representation of
+each game frame to stdout.  This is useful for development and debugging
+over a serial / REPL connection without a physical OLED attached.
 """
 
 import json
@@ -74,6 +83,13 @@ COLLISION_TOLERANCE = 3
 # How long the mode-selection loop sleeps between stdin polls (ms).
 INPUT_POLL_INTERVAL_MS = 50
 
+# ---------------------------------------------------------------------------
+# Debug flag
+# ---------------------------------------------------------------------------
+# Set to True to print an ASCII frame of the game to stdout each loop tick.
+# Useful for debugging over a serial / REPL connection without an OLED.
+ASCII_DEBUG = False
+
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -99,19 +115,6 @@ def _fill_rect_centered(x, y, w, h, color=1):
     rh = min(int(h), LCD_HEIGHT - y0)
     if rw > 0 and rh > 0:
         oled.fill_rect(x0, y0, rw, rh, color)
-
-
-def _fill_circle(cx, cy, r, color=1):
-    """Draw a filled circle at integer (cx, cy) with radius *r*."""
-    cx, cy, r = int(cx), int(cy), int(r)
-    for dy in range(-r, r + 1):
-        dx = int(math.sqrt(max(0, r * r - dy * dy)))
-        ry = cy + dy
-        if 0 <= ry < LCD_HEIGHT:
-            rx = max(0, cx - dx)
-            rw = min(LCD_WIDTH - rx, dx * 2 + 1)
-            if rw > 0:
-                oled.fill_rect(rx, ry, rw, 1, color)
 
 
 def _random_puck_velocity():
@@ -147,6 +150,82 @@ def _read_json():
     except (ValueError, OSError):
         pass
     return {}
+
+
+# ---------------------------------------------------------------------------
+# ASCII debug renderer
+# ---------------------------------------------------------------------------
+
+# Dimensions of the ASCII frame in characters.
+_ASCII_COLS = 64
+_ASCII_ROWS = 16
+
+
+def _debug_print_frame(left, right, puck):
+    """
+    Print a scaled-down ASCII art representation of the current game frame
+    to stdout.
+
+    Each character cell covers (LCD_WIDTH / _ASCII_COLS) × (LCD_HEIGHT /
+    _ASCII_ROWS) pixels.  The output is prefixed with ANSI cursor-home so
+    successive frames overwrite each other in a capable terminal emulator;
+    on plain serial monitors each frame is simply appended.
+
+    Symbols used
+      |   paddle (left or right)
+      o   ball
+      :   centre-line dash (alternating rows)
+      -   top / bottom border
+      +   corner
+    """
+    def _to_col(px):
+        return min(_ASCII_COLS - 1, max(0, int(px * _ASCII_COLS / LCD_WIDTH)))
+
+    def _to_row(py):
+        return min(_ASCII_ROWS - 1, max(0, int(py * _ASCII_ROWS / LCD_HEIGHT)))
+
+    # Build blank grid
+    grid = [[' '] * _ASCII_COLS for _ in range(_ASCII_ROWS)]
+
+    # Centre dashed line
+    cx = _ASCII_COLS // 2
+    for r in range(_ASCII_ROWS):
+        grid[r][cx] = ':' if r % 2 == 0 else ' '
+
+    # Paddle height in ASCII rows (proportional)
+    paddle_half = max(1, int(PADDLE_HEIGHT * _ASCII_ROWS / LCD_HEIGHT / 2))
+
+    # Left paddle
+    lx = _to_col(left.position.x)
+    ly = _to_row(left.position.y)
+    for r in range(max(0, ly - paddle_half), min(_ASCII_ROWS, ly + paddle_half + 1)):
+        grid[r][lx] = '|'
+
+    # Right paddle
+    rx = _to_col(right.position.x)
+    ry = _to_row(right.position.y)
+    for r in range(max(0, ry - paddle_half), min(_ASCII_ROWS, ry + paddle_half + 1)):
+        grid[r][rx] = '|'
+
+    # Ball
+    bx = _to_col(puck.position.x)
+    by = _to_row(puck.position.y)
+    grid[by][bx] = 'o'
+
+    # Compose lines
+    border = '+' + '-' * _ASCII_COLS + '+'
+    pad = (_ASCII_COLS // 2 - 4)
+    score_line = (' ' * pad + str(left.score)
+                  + ' ' * 7
+                  + str(right.score))
+    rows = ['\x1b[H',  # ANSI cursor-home (ignored on plain serial)
+            score_line,
+            border]
+    for row in grid:
+        rows.append('|' + ''.join(row) + '|')
+    rows.append(border)
+
+    sys.stdout.write('\n'.join(rows) + '\n')
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +385,9 @@ class Puck:
         self._score()
 
     def show(self):
-        _fill_circle(self.position.x, self.position.y, PUCK_RADIUS)
+        """Draw the ball as a filled square (side = PUCK_RADIUS * 2)."""
+        size = PUCK_RADIUS * 2
+        _fill_rect_centered(self.position.x, self.position.y, size, size)
 
     # -- private -----------------------------------------------------------
 
@@ -440,6 +521,10 @@ def main():
         oled.text(str(right.score), LCD_WIDTH // 2 + 6, 2, 1)
 
         oled.show()
+
+        # Optional ASCII debug output to stdout
+        if ASCII_DEBUG:
+            _debug_print_frame(left, right, puck)
 
     oled.fill(0)
     oled.show()
