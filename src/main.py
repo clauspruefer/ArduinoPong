@@ -214,9 +214,14 @@ def _debug_print_frame(left, right, puck):
 
     # Compose lines
     border = '+' + '-' * _ASCII_COLS + '+'
-    pad = (_ASCII_COLS // 2 - 4)
+    # Left score is placed slightly left of centre; right score to the right.
+    # _SCORE_INDENT shifts both numbers away from the midpoint so they sit
+    # roughly above their respective halves of the field.
+    _SCORE_INDENT = 4
+    _SCORE_GAP = 7   # spaces between the two score numbers
+    pad = _ASCII_COLS // 2 - _SCORE_INDENT
     score_line = (' ' * pad + str(left.score)
-                  + ' ' * 7
+                  + ' ' * _SCORE_GAP
                   + str(right.score))
     rows = ['\x1b[H',  # ANSI cursor-home (ignored on plain serial)
             score_line,
