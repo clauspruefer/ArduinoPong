@@ -124,7 +124,7 @@ def _random_puck_velocity():
     normalised to PUCK_START_SPEED by the caller.
     """
     vy = random.uniform(-1.0, 1.0)
-    vx = (random.random() * 3.0 + 1.0) * abs(vy) * _sign(random.uniform(-1.0, 1.0))
+    vx = (random.random() * 3.0 + 1.0) * abs(vy) * random.choice([-1, 1])
     return vx, vy
 
 
@@ -204,6 +204,18 @@ class Vector:
 
     def __mul__(self, scalar):
         return Vector(self.x * scalar, self.y * scalar)
+
+    def flip_y(self):
+        """Negate the y component and update magnitude / angle."""
+        self.y *= -1
+        self._recalc()
+        return self
+
+    def flip_x(self):
+        """Negate the x component and update magnitude / angle."""
+        self.x *= -1
+        self._recalc()
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -309,8 +321,7 @@ class Puck:
         """Reflect off the top / bottom walls."""
         if (self.position.y < PUCK_RADIUS or
                 self.position.y > LCD_HEIGHT - PUCK_RADIUS):
-            self.velocity.y *= -1
-            self.velocity._recalc()
+            self.velocity.flip_y()
 
     def _collide(self):
         """Deflect off either paddle using an angle-based reflection."""
@@ -330,7 +341,7 @@ class Puck:
             angle = ((self.position.y - (self.right.position.y - half_h))
                      / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
             self.velocity.set_angle(angle)
-            self.velocity.x *= -1           # flip to move left
+            self.velocity.flip_x()           # flip to move left
             self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
     def _between_paddle(self, paddle_pos) -> bool:
