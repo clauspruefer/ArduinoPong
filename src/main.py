@@ -66,6 +66,14 @@ PUCK_START_SPEED = 40    # pixels / second after reset
 PUCK_PLAY_SPEED = 120    # pixels / second after paddle hit
 PUCK_RADIUS = 2
 
+# Extra vertical tolerance added to each side of the paddle when checking
+# whether the puck is "between" a paddle (prevents the ball tunnelling
+# through at shallow angles).
+COLLISION_TOLERANCE = 3
+
+# How long the mode-selection loop sleeps between stdin polls (ms).
+INPUT_POLL_INTERVAL_MS = 50
+
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -104,6 +112,20 @@ def _fill_circle(cx, cy, r, color=1):
             rw = min(LCD_WIDTH - rx, dx * 2 + 1)
             if rw > 0:
                 oled.fill_rect(rx, ry, rw, 1, color)
+
+
+def _random_puck_velocity():
+    """
+    Return a random (vx, vy) launch direction for the puck after a reset.
+
+    *vy* is uniform in [-1, 1].  *vx* is scaled by a random factor in
+    [1, 4] and given a random horizontal sign, ensuring the ball always
+    launches at a noticeable angle.  The returned vector is subsequently
+    normalised to PUCK_START_SPEED by the caller.
+    """
+    vy = random.uniform(-1.0, 1.0)
+    vx = (random.random() * 3.0 + 1.0) * abs(vy) * _sign(random.uniform(-1.0, 1.0))
+    return vx, vy
 
 
 def _read_json():
@@ -200,14 +222,22 @@ class Paddle:
         self._down = False
 
     def set_input(self, up: bool, down: bool):
-        """Apply JSON-sourced directional input for this frame."""
+        """
+        Apply JSON-sourced directional input for this frame.
+
+        *up* and *down* are expected to be the result of boolean expressions
+        (e.g. ``p1 == "up"``), not raw strings.  Both may be False to
+        indicate no movement.
+        """
         self._up = up
         self._down = down
 
     def update(self, dt, puck):
         if self.is_auto:
             self.speed = PADDLE_AUTO_SPEED
-            # Only track the puck when it is moving toward this paddle
+            # Track the puck only when it is heading toward this paddle.
+            # When _sign() returns 0 (puck moving purely vertically) or the
+            # signs differ (puck moving away), the paddle holds its position.
             if _sign(self.position.x - puck.position.x) == _sign(puck.velocity.x):
                 diff = puck.position.y - self.position.y
                 if diff < -self.speed * dt:
@@ -254,11 +284,7 @@ class Puck:
             self.left.score += 1
 
         self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-
-        # Random initial velocity (mirrors the C++ random logic)
-        rn = random.uniform(-1.0, 1.0)
-        rx = (random.random() * 3.0 + 1.0) * abs(rn) * _sign(random.uniform(-1.0, 1.0))
-        self.velocity.set(rx, rn)
+        self.velocity.set(*_random_puck_velocity())
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
     def update(self, dt: float):
@@ -310,8 +336,8 @@ class Puck:
     def _between_paddle(self, paddle_pos) -> bool:
         """Return True when the puck's y-range overlaps *paddle_pos*."""
         half_h = PADDLE_HEIGHT / 2
-        return (self.position.y + PUCK_RADIUS + 3 > paddle_pos.y - half_h and
-                self.position.y - PUCK_RADIUS - 3 < paddle_pos.y + half_h)
+        return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
+                self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE < paddle_pos.y + half_h)
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +389,7 @@ def main():
             oled.fill(0)
             oled.show()
             return
-        time.sleep_ms(50)
+        time.sleep_ms(INPUT_POLL_INTERVAL_MS)
 
     # ---- Game loop -----------------------------------------------------
     last_ms = time.ticks_ms()
