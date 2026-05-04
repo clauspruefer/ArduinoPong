@@ -41,11 +41,25 @@ it has ended; the caller may stop further invocations at that point.
 The optional helper ``read_json()`` is provided for callers that source
 input from sys.stdin rather than constructing dicts directly.
 
-ASCII debug output
-------------------
-Set ASCII_DEBUG = True (below) to print a scaled ASCII representation of
-each game frame to stdout.  Useful for debugging over a serial / REPL
-connection without a physical OLED attached.
+Output mode flags (set at the top of this file)
+-------------------------------------------------
+Two independent boolean flags control where the game renders:
+
+``OLED_OUTPUT`` (default ``True``)
+    Render each frame to the physical SSD1306 OLED.  Set to ``False`` when
+    running on a host PC / in an emulator / without hardware attached.  When
+    disabled the ``ssd1306`` and ``machine`` imports are skipped entirely.
+
+``ASCII_DEBUG`` (default ``False``)
+    Print a scaled ASCII representation of each frame to stdout.  Set to
+    ``True`` to debug over a serial / REPL connection.
+
+The two flags are fully independent; any combination is valid:
+
+    OLED_OUTPUT = True,  ASCII_DEBUG = False  →  OLED only   (default)
+    OLED_OUTPUT = False, ASCII_DEBUG = True   →  ASCII only
+    OLED_OUTPUT = True,  ASCII_DEBUG = True   →  OLED + ASCII
+    OLED_OUTPUT = False, ASCII_DEBUG = False  →  headless / no output
 """
 
 import json
@@ -54,19 +68,32 @@ import random
 import sys
 import time
 
-import ssd1306
-from machine import I2C, Pin
+# ---------------------------------------------------------------------------
+# Output mode flags  –  adjust these before deploying
+# ---------------------------------------------------------------------------
+# Render to the physical SSD1306 OLED (requires ssd1306 + machine).
+OLED_OUTPUT = True
+
+# Print an ASCII frame to stdout each tick (useful without hardware).
+ASCII_DEBUG = False
 
 # ---------------------------------------------------------------------------
 # Hardware / display constants  –  adjust to match your board
 # ---------------------------------------------------------------------------
+
+if OLED_OUTPUT:
+    import ssd1306
+    from machine import I2C, Pin
 SCL_PIN = 22
 SDA_PIN = 21
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
 
-i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
-oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, i2c)
+if OLED_OUTPUT:
+    _i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
+    oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, _i2c)
+else:
+    oled = None
 
 # ---------------------------------------------------------------------------
 # Paddle geometry constants  (scaled from 320×240 → 128×64)
@@ -93,13 +120,6 @@ COLLISION_TOLERANCE = 3
 # polling stdin in a custom driver loop (milliseconds).
 INPUT_POLL_INTERVAL_MS = 50
 
-# ---------------------------------------------------------------------------
-# Debug flag
-# ---------------------------------------------------------------------------
-# Set to True to print an ASCII frame of the game to stdout each loop tick.
-# Useful for debugging over a serial / REPL connection without an OLED.
-ASCII_DEBUG = False
-
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -124,7 +144,8 @@ def _fill_rect_centered(x, y, w, h, color=1):
     rw = min(int(w), LCD_WIDTH - x0)
     rh = min(int(h), LCD_HEIGHT - y0)
     if rw > 0 and rh > 0:
-        oled.fill_rect(x0, y0, rw, rh, color)
+        if OLED_OUTPUT:
+            oled.fill_rect(x0, y0, rw, rh, color)
 
 
 def _random_puck_velocity():
@@ -464,13 +485,14 @@ def _draw_center_line():
 
 def _show_splash():
     """Title / mode-selection screen."""
-    oled.fill(0)
-    oled.text("ArduinoPong", 18, 2, 1)
-    oled.text("L:Single  R:Multi", 0, 16, 1)
-    oled.text("Up/Down = Move", 0, 28, 1)
-    oled.text("q = Quit", 0, 40, 1)
-    oled.text("By Warren James", 0, 54, 1)
-    oled.show()
+    if OLED_OUTPUT:
+        oled.fill(0)
+        oled.text("ArduinoPong", 18, 2, 1)
+        oled.text("L:Single  R:Multi", 0, 16, 1)
+        oled.text("Up/Down = Move", 0, 28, 1)
+        oled.text("q = Quit", 0, 40, 1)
+        oled.text("By Warren James", 0, 54, 1)
+        oled.show()
 
 
 # ---------------------------------------------------------------------------
@@ -567,15 +589,24 @@ class Game:
         self.puck.update(dt)
 
         # Render to OLED
-        oled.fill(0)
-        _draw_center_line()
-        self.left.show()
-        self.right.show()
-        self.puck.show()
-        # Scores: left score left of centre, right score right of centre
-        oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
-        oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
-        oled.show()
+        if OLED_OUTPUT:
+            oled.fill(0)
+            _draw_center_line()
+            self.left.show()
+            self.right.show()
+            self.puck.show()
+            # Scores: left score left of centre, right score right of centre
+            oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
+            oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
+            oled.show()
+        else:
+            # Non-OLED path still needs show() calls on paddles/puck so that
+            # ASCII debug uses up-to-date positions; those calls are no-ops
+            # when oled is None because _fill_rect_centered already guards them.
+            _draw_center_line()
+            self.left.show()
+            self.right.show()
+            self.puck.show()
 
         # Optional ASCII debug output to stdout
         if ASCII_DEBUG:
@@ -590,8 +621,9 @@ class Game:
 
     def _do_quit(self):
         """Clear the display and mark the game as finished."""
-        oled.fill(0)
-        oled.show()
+        if OLED_OUTPUT:
+            oled.fill(0)
+            oled.show()
         self._state = self._QUIT
 
 
