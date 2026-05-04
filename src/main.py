@@ -14,34 +14,32 @@ your hardware).
 The ball is drawn as a filled square (side = PUCK_RADIUS * 2) rather
 than a circle for simplicity and speed on constrained hardware.
 
-API – frame-by-frame external control
---------------------------------------
-The game no longer contains a blocking main loop.  Instead it exposes a
-``Game`` class whose ``step(data)`` method advances exactly one frame::
+API – single-frame function
+----------------------------
+This module exposes one public function, ``render_frame(data)``, that
+renders exactly one frame of the game.  The caller (a timer callback,
+a coroutine, or any other MicroPython scheduler) is responsible for
+calling it periodically – there is no loop inside this module.
 
-    game = Game()
-    game.show_splash()
+    import main
 
-    # mode selection – caller passes a dict just as it would a JSON object
-    game.step({"start": "single"})   # or "multi"
-
-    # game loop driven by an external scheduler / timer / coroutine
-    running = True
-    while running:
-        data = get_input_from_somewhere()   # dict from JSON, buttons, etc.
-        running = game.step(data)
+    # Each call advances the game by one frame:
+    main.render_frame({"start": "multi"})     # transition splash → play
+    main.render_frame({"player1": "up"})      # move left paddle up
+    main.render_frame({"player2": "down"})    # move right paddle down
+    main.render_frame({"quit": True})         # end the game
 
 Accepted dict keys
-  "start"   – "single" | "multi" | "quit"   (while in splash / idle state)
+  "start"   – "single" | "multi" | "quit"   (while splash is shown)
   "player1" – "up" | "down" | "none"         (left paddle, during play)
   "player2" – "up" | "down" | "none"         (right paddle, during play)
-  "quit"    – any truthy value               (exit during play)
+  "quit"    – any truthy value               (end the game at any time)
 
-``step()`` returns True while the game is running and False once it has
-ended (caller should stop scheduling further calls).
+``render_frame()`` returns True while the game is running and False once
+it has ended; the caller may stop further invocations at that point.
 
-The standalone helper ``read_json()`` is still provided for callers that
-prefer to source input from sys.stdin rather than supply dicts directly.
+The optional helper ``read_json()`` is provided for callers that source
+input from sys.stdin rather than constructing dicts directly.
 
 ASCII debug output
 ------------------
@@ -481,23 +479,12 @@ def _show_splash():
 
 class Game:
     """
-    Encapsulates all ArduinoPong game state and exposes a single-frame API.
+    Holds all ArduinoPong game state (paddles, puck, scores).
 
-    Typical usage::
-
-        game = Game()
-        game.show_splash()
-
-        # Start the game (may also be triggered via step({"start": "single"}))
-        game.step({"start": "multi"})
-
-        # Drive the game from an external scheduler / timer / coroutine:
-        while game.step(get_input()):
-            pass   # step() returns False when the game ends
-
-    The external driver is responsible for timing; it may call ``step()`` as
-    fast or as slowly as it likes.  ``step()`` measures elapsed wall-clock
-    time internally so physics are frame-rate independent.
+    External code should normally use the module-level ``render_frame()``
+    function rather than instantiating this class directly.  Direct
+    instantiation is available for advanced use-cases such as running
+    multiple independent game instances.
     """
 
     # Internal state constants
@@ -606,3 +593,42 @@ class Game:
         oled.fill(0)
         oled.show()
         self._state = self._QUIT
+
+
+# ---------------------------------------------------------------------------
+# Module-level public API
+# ---------------------------------------------------------------------------
+
+# Shared game instance used by render_frame().
+_game = Game()
+
+
+def render_frame(data):
+    """
+    Render exactly one frame of the game.
+
+    Parameters
+    ----------
+    data : dict
+        Control input for this frame.  Construct it from a JSON string with
+        ``json.loads()``, from hardware button states, or any other source.
+        Recognised keys:
+
+          "start"   – "single" | "multi" | "quit"  (while splash is shown)
+          "player1" – "up" | "down" | "none"        (left paddle)
+          "player2" – "up" | "down" | "none"        (right paddle)
+          "quit"    – any truthy value              (end the game)
+
+    Returns
+    -------
+    bool
+        True while the game is running; False once the game has ended.
+        The caller may stop issuing further calls when False is returned.
+
+    Notes
+    -----
+    This function contains no loop.  The caller is responsible for
+    scheduling periodic invocations (e.g. via a MicroPython timer,
+    coroutine, or ``uasyncio`` task).
+    """
+    return _game.step(data)
