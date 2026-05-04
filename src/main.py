@@ -21,13 +21,13 @@ renders exactly one frame of the game.  The caller (a timer callback,
 a coroutine, or any other MicroPython scheduler) is responsible for
 calling it periodically – there is no loop inside this module.
 
-    import main
+    import pong          # name your copy of this module as you like
 
     # Each call advances the game by one frame:
-    main.render_frame({"start": "multi"})     # transition splash → play
-    main.render_frame({"player1": "up"})      # move left paddle up
-    main.render_frame({"player2": "down"})    # move right paddle down
-    main.render_frame({"quit": True})         # end the game
+    pong.render_frame({"start": "multi"})     # transition splash → play
+    pong.render_frame({"player1": "up"})      # move left paddle up
+    pong.render_frame({"player2": "down"})    # move right paddle down
+    pong.render_frame({"quit": True})         # end the game
 
 Accepted dict keys
   "start"   – "single" | "multi" | "quit"   (while splash is shown)
