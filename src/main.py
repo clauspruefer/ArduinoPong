@@ -84,14 +84,14 @@ ASCII_DEBUG = False
 if OLED_OUTPUT:
     import ssd1306
     from machine import I2C, Pin
-SCL_PIN = 22
-SDA_PIN = 21
+    SCL_PIN = 22
+    SDA_PIN = 21
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
 
 if OLED_OUTPUT:
-    _i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
-    oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, _i2c)
+    i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
+    oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, i2c)
 else:
     oled = None
 
@@ -600,13 +600,12 @@ class Game:
             oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
             oled.show()
         else:
-            # Non-OLED path still needs show() calls on paddles/puck so that
-            # ASCII debug uses up-to-date positions; those calls are no-ops
-            # when oled is None because _fill_rect_centered already guards them.
-            _draw_center_line()
-            self.left.show()
-            self.right.show()
-            self.puck.show()
+            # Non-OLED path: only run show() calls when ASCII_DEBUG needs them.
+            if ASCII_DEBUG:
+                _draw_center_line()
+                self.left.show()
+                self.right.show()
+                self.puck.show()
 
         # Optional ASCII debug output to stdout
         if ASCII_DEBUG:
