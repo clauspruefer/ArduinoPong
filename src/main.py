@@ -514,8 +514,7 @@ class Game:
 
     # -- public ------------------------------------------------------------
 
-    @staticmethod
-    def show_splash():
+    def show_splash(self):
         """Display the title / mode-selection screen on the OLED."""
         _show_splash()
 
