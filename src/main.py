@@ -14,29 +14,40 @@ your hardware).
 The ball is drawn as a filled square (side = PUCK_RADIUS * 2) rather
 than a circle for simplicity and speed on constrained hardware.
 
-Input / controls
-----------------
-Player movement is provided as a single JSON object delivered per frame
-on sys.stdin (e.g. over a USB-serial / UART link).  One JSON line is
-consumed per game-loop iteration; if no data is available the previous
-movement state is kept.
+API – frame-by-frame external control
+--------------------------------------
+The game no longer contains a blocking main loop.  Instead it exposes a
+``Game`` class whose ``step(data)`` method advances exactly one frame::
 
-Accepted JSON keys
-  start   – "single" | "multi" | "quit"   (splash screen only)
-  player1 – "up" | "down" | "none"         (left paddle)
-  player2 – "up" | "down" | "none"         (right paddle)
-  quit    – true                           (exit during play)
+    game = Game()
+    game.show_splash()
 
-Example frame inputs
-  {"player1": "up",   "player2": "down"}
-  {"player1": "none", "player2": "up"}
-  {"quit": true}
+    # mode selection – caller passes a dict just as it would a JSON object
+    game.step({"start": "single"})   # or "multi"
+
+    # game loop driven by an external scheduler / timer / coroutine
+    running = True
+    while running:
+        data = get_input_from_somewhere()   # dict from JSON, buttons, etc.
+        running = game.step(data)
+
+Accepted dict keys
+  "start"   – "single" | "multi" | "quit"   (while in splash / idle state)
+  "player1" – "up" | "down" | "none"         (left paddle, during play)
+  "player2" – "up" | "down" | "none"         (right paddle, during play)
+  "quit"    – any truthy value               (exit during play)
+
+``step()`` returns True while the game is running and False once it has
+ended (caller should stop scheduling further calls).
+
+The standalone helper ``read_json()`` is still provided for callers that
+prefer to source input from sys.stdin rather than supply dicts directly.
 
 ASCII debug output
 ------------------
 Set ASCII_DEBUG = True (below) to print a scaled ASCII representation of
-each game frame to stdout.  This is useful for development and debugging
-over a serial / REPL connection without a physical OLED attached.
+each game frame to stdout.  Useful for debugging over a serial / REPL
+connection without a physical OLED attached.
 """
 
 import json
@@ -80,7 +91,8 @@ PUCK_RADIUS = 2
 # through at shallow angles).
 COLLISION_TOLERANCE = 3
 
-# How long the mode-selection loop sleeps between stdin polls (ms).
+# Suggested interval between ``read_json()`` / ``Game.step()`` calls when
+# polling stdin in a custom driver loop (milliseconds).
 INPUT_POLL_INTERVAL_MS = 50
 
 # ---------------------------------------------------------------------------
@@ -131,10 +143,13 @@ def _random_puck_velocity():
     return vx, vy
 
 
-def _read_json():
+def read_json():
     """
-    Try to read one JSON line from stdin without blocking.
-    Returns a dict, or {} when no data is ready.
+    Convenience helper: try to read one JSON line from stdin without blocking.
+
+    Returns a dict suitable for passing directly to ``Game.step()``, or {}
+    when no data is available.  Callers that source input from another
+    channel (GPIO buttons, BLE, etc.) can ignore this function entirely.
     """
     try:
         import select
@@ -461,78 +476,134 @@ def _show_splash():
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# Game – public API
 # ---------------------------------------------------------------------------
 
-def main():
-    _show_splash()
+class Game:
+    """
+    Encapsulates all ArduinoPong game state and exposes a single-frame API.
 
-    left = Paddle(PADDLE_BORDER)
-    right = Paddle(LCD_WIDTH - PADDLE_BORDER)
-    puck = Puck(left, right)
+    Typical usage::
 
-    # ---- Mode selection ------------------------------------------------
-    # Block until a valid start command arrives as JSON on stdin.
-    # Example: {"start": "single"}  or  {"start": "multi"}
-    while True:
-        data = _read_json()
+        game = Game()
+        game.show_splash()
+
+        # Start the game (may also be triggered via step({"start": "single"}))
+        game.step({"start": "multi"})
+
+        # Drive the game from an external scheduler / timer / coroutine:
+        while game.step(get_input()):
+            pass   # step() returns False when the game ends
+
+    The external driver is responsible for timing; it may call ``step()`` as
+    fast or as slowly as it likes.  ``step()`` measures elapsed wall-clock
+    time internally so physics are frame-rate independent.
+    """
+
+    # Internal state constants
+    _SPLASH = 0
+    _PLAY   = 1
+    _QUIT   = 2
+
+    def __init__(self):
+        self.left  = Paddle(PADDLE_BORDER)
+        self.right = Paddle(LCD_WIDTH - PADDLE_BORDER)
+        self.puck  = Puck(self.left, self.right)
+        self._state   = self._SPLASH
+        self._last_ms = time.ticks_ms()
+
+    # -- public ------------------------------------------------------------
+
+    @staticmethod
+    def show_splash():
+        """Display the title / mode-selection screen on the OLED."""
+        _show_splash()
+
+    def step(self, data: dict) -> bool:
+        """
+        Advance the game by one frame using *data* as the control input.
+
+        *data* is a plain dict (e.g. the result of ``json.loads()`` or
+        ``read_json()``).  Recognised keys:
+
+          "start"   – "single" | "multi" | "quit"  (while showing splash)
+          "player1" – "up" | "down" | "none"        (left paddle, during play)
+          "player2" – "up" | "down" | "none"        (right paddle, during play)
+          "quit"    – any truthy value              (exit at any time)
+
+        Returns True while the game should keep running, False once it has
+        ended (caller should stop issuing further ``step()`` calls).
+        """
+        if self._state == self._SPLASH:
+            return self._step_splash(data)
+        if self._state == self._PLAY:
+            return self._step_play(data)
+        return False   # _QUIT
+
+    # -- private -----------------------------------------------------------
+
+    def _step_splash(self, data: dict) -> bool:
+        """Handle one frame while the splash / mode-selection screen is shown."""
+        if data.get("quit"):
+            self._do_quit()
+            return False
+
         start = data.get("start", "")
         if start == "single":
-            left.is_auto = True
-            break
+            self.left.is_auto = True
+            self._begin_play()
         elif start == "multi":
-            break
-        elif start == "quit" or data.get("quit"):
-            oled.fill(0)
-            oled.show()
-            return
-        time.sleep_ms(INPUT_POLL_INTERVAL_MS)
+            self._begin_play()
+        # Any other (or missing) key: stay on splash, nothing to render.
+        return True
 
-    # ---- Game loop -----------------------------------------------------
-    last_ms = time.ticks_ms()
-
-    while True:
-        now_ms = time.ticks_ms()
-        dt = time.ticks_diff(now_ms, last_ms) / 1000.0
-        last_ms = now_ms
-
-        # Input – one JSON object per frame, e.g.:
-        #   {"player1": "up", "player2": "down"}
-        data = _read_json()
-
+    def _step_play(self, data: dict) -> bool:
+        """Handle one frame of active gameplay."""
         if data.get("quit"):
-            break
+            self._do_quit()
+            return False
 
+        # Elapsed time since last step (seconds)
+        now_ms = time.ticks_ms()
+        dt = time.ticks_diff(now_ms, self._last_ms) / 1000.0
+        self._last_ms = now_ms
+
+        # Apply player input
         p1 = data.get("player1", "none")
-        left.set_input(p1 == "up", p1 == "down")
+        self.left.set_input(p1 == "up", p1 == "down")
 
         p2 = data.get("player2", "none")
-        right.set_input(p2 == "up", p2 == "down")
+        self.right.set_input(p2 == "up", p2 == "down")
 
         # Update game state
-        left.update(dt, puck)
-        right.update(dt, puck)
-        puck.update(dt)
+        self.left.update(dt, self.puck)
+        self.right.update(dt, self.puck)
+        self.puck.update(dt)
 
-        # Render
+        # Render to OLED
         oled.fill(0)
         _draw_center_line()
-        left.show()
-        right.show()
-        puck.show()
-
-        # Scores – left score left of centre, right score right of centre
-        oled.text(str(left.score), LCD_WIDTH // 2 - 12, 2, 1)
-        oled.text(str(right.score), LCD_WIDTH // 2 + 6, 2, 1)
-
+        self.left.show()
+        self.right.show()
+        self.puck.show()
+        # Scores: left score left of centre, right score right of centre
+        oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
+        oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
         oled.show()
 
         # Optional ASCII debug output to stdout
         if ASCII_DEBUG:
-            _debug_print_frame(left, right, puck)
+            _debug_print_frame(self.left, self.right, self.puck)
 
-    oled.fill(0)
-    oled.show()
+        return True
 
+    def _begin_play(self):
+        """Transition from splash to active play, resetting the frame timer."""
+        self._state   = self._PLAY
+        self._last_ms = time.ticks_ms()
 
-main()
+    def _do_quit(self):
+        """Clear the display and mark the game as finished."""
+        oled.fill(0)
+        oled.show()
+        self._state = self._QUIT
