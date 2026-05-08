@@ -258,7 +258,12 @@ class Paddle:
                 elif diff > self.speed * dt:
                     self.position.y += self.speed * dt
         else:
-            direction = -1 if self._up else (1 if self._down else 0)
+            if self._up:
+                direction = -1
+            elif self._down:
+                direction = 1
+            else:
+                direction = 0
             self.position.y += self.speed * dt * direction
 
         # Clamp to vertical display bounds
@@ -348,6 +353,14 @@ class Puck:
 
 
 # ---------------------------------------------------------------------------
+# Game state constants (module-level for reliable access in MicroPython)
+# ---------------------------------------------------------------------------
+_STATE_SPLASH = 0
+_STATE_PLAY   = 1
+_STATE_QUIT   = 2
+
+
+# ---------------------------------------------------------------------------
 # Game – public API
 # ---------------------------------------------------------------------------
 
@@ -361,16 +374,11 @@ class Game:
     multiple independent game instances.
     """
 
-    # Internal state constants
-    _SPLASH = 0
-    _PLAY   = 1
-    _QUIT   = 2
-
     def __init__(self):
         self.left  = Paddle(PADDLE_BORDER)
         self.right = Paddle(LCD_WIDTH - PADDLE_BORDER)
         self.puck  = Puck(self.left, self.right)
-        self._state = self._SPLASH
+        self._state = _STATE_SPLASH
 
     # -- public ------------------------------------------------------------
 
@@ -393,11 +401,11 @@ class Game:
         Returns an empty string ``""`` during the splash screen or after
         the game has ended.
         """
-        if self._state == self._SPLASH:
+        if self._state == _STATE_SPLASH:
             return self._step_splash(data)
-        if self._state == self._PLAY:
+        if self._state == _STATE_PLAY:
             return self._step_play(data, dt)
-        return ""   # _QUIT
+        return ""   # _STATE_QUIT
 
     # -- private -----------------------------------------------------------
 
@@ -447,11 +455,11 @@ class Game:
 
     def _begin_play(self):
         """Transition from splash to active play."""
-        self._state = self._PLAY
+        self._state = _STATE_PLAY
 
     def _do_quit(self):
         """Mark the game as finished."""
-        self._state = self._QUIT
+        self._state = _STATE_QUIT
 
 
 # ---------------------------------------------------------------------------
