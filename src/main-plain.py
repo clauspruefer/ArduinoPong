@@ -367,11 +367,9 @@ class Game:
             self._do_quit()
             return False
 
-        p1 = data.get("player1", "none")
-        self.left.set_input(p1)
+        self.left.set_input(data.get("player1", "none"))
 
-        p2 = data.get("player2", "none")
-        self.right.set_input(p2)
+        self.right.set_input(data.get("player2", "none"))
 
         self.left.update(dt, self.puck)
         self.right.update(dt, self.puck)
