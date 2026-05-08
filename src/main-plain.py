@@ -99,7 +99,10 @@ class Vector:
 
     def _recalc(self):
         self.magnitude = math.sqrt(self.x * self.x + self.y * self.y)
-        self.angle = math.atan2(self.y, self.x) if self.magnitude else 0.0
+        if self.magnitude:
+            self.angle = math.atan2(self.y, self.x)
+        else:
+            self.angle = 0.0
 
     def set(self, x, y):
         self.x, self.y = float(x), float(y)
@@ -161,12 +164,11 @@ class Paddle:
                 elif diff > self.speed * dt:
                     self.position.y += self.speed * dt
         else:
+            direction = 0
             if self._up:
                 direction = -1
             elif self._down:
                 direction = 1
-            else:
-                direction = 0
             self.position.y += self.speed * dt * direction
 
         half_h = PADDLE_HEIGHT / 2
@@ -188,7 +190,8 @@ class Puck:
             self.left.score += 1
 
         self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-        self.velocity.set(*_random_puck_velocity())
+        _vx, _vy = _random_puck_velocity()
+        self.velocity.set(_vx, _vy)
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
     def update(self, dt):

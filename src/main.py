@@ -33,7 +33,10 @@ Return value
 """
 
 import math
-import json
+try:
+    import ujson as _json
+except ImportError:
+    import json as _json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -176,7 +179,10 @@ class Vector:
 
     def _recalc(self):
         self.magnitude = math.sqrt(self.x * self.x + self.y * self.y)
-        self.angle = math.atan2(self.y, self.x) if self.magnitude else 0.0
+        if self.magnitude:
+            self.angle = math.atan2(self.y, self.x)
+        else:
+            self.angle = 0.0
 
     # -- mutators ----------------------------------------------------------
 
@@ -259,12 +265,11 @@ class Paddle:
                 elif diff > self.speed * dt:
                     self.position.y += self.speed * dt
         else:
+            direction = 0   # no key pressed → stationary
             if self._up:
                 direction = -1
             elif self._down:
                 direction = 1
-            else:
-                direction = 0
             self.position.y += self.speed * dt * direction
 
         # Clamp to vertical display bounds
@@ -299,7 +304,8 @@ class Puck:
             self.left.score += 1
 
         self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-        self.velocity.set(*_random_puck_velocity())
+        _vx, _vy = _random_puck_velocity()
+        self.velocity.set(_vx, _vy)
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
     def update(self, dt):
@@ -403,7 +409,7 @@ class Game:
         the game has ended.
         """
         if isinstance(data, str):
-            data = json.loads(data)
+            data = _json.loads(data)
         if self._state == _STATE_SPLASH:
             return self._step_splash(data)
         if self._state == _STATE_PLAY:
