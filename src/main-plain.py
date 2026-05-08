@@ -222,7 +222,7 @@ class Paddle:
         self._up = False
         self._down = False
 
-    def set_input(self, up: bool, down: bool):
+    def set_input(self, up, down):
         self._up = up
         self._down = down
 
@@ -255,7 +255,7 @@ class Puck:
         self.right = right
         self.reset(0)
 
-    def reset(self, state: int):
+    def reset(self, state):
         if state > 0:
             self.right.score += 1
         elif state < 0:
@@ -265,7 +265,7 @@ class Puck:
         self.velocity.set(*_random_puck_velocity())
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
-    def update(self, dt: float):
+    def update(self, dt):
         self.position += self.velocity * dt
         self._collide()
         self._bounce()
@@ -306,7 +306,7 @@ class Puck:
             self.velocity.flip_x()
             self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
-    def _between_paddle(self, paddle_pos) -> bool:
+    def _between_paddle(self, paddle_pos):
         half_h = PADDLE_HEIGHT / 2
         return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
                 self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE < paddle_pos.y + half_h)
@@ -342,14 +342,14 @@ class Game:
     def show_splash(self):
         _show_splash()
 
-    def step(self, data: dict, dt: float) -> bool:
+    def step(self, data, dt):
         if self._state == self._SPLASH:
             return self._step_splash(data)
         if self._state == self._PLAY:
             return self._step_play(data, dt)
         return False
 
-    def _step_splash(self, data: dict) -> bool:
+    def _step_splash(self, data):
         if data.get("quit"):
             self._do_quit()
             return False
@@ -362,7 +362,7 @@ class Game:
             self._begin_play()
         return True
 
-    def _step_play(self, data: dict, dt: float) -> bool:
+    def _step_play(self, data, dt):
         dt = min(float(dt), MAX_DT)
 
         if data.get("quit"):

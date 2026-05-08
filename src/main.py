@@ -388,7 +388,7 @@ class Paddle:
         self._up = False
         self._down = False
 
-    def set_input(self, up: bool, down: bool):
+    def set_input(self, up, down):
         """
         Apply JSON-sourced directional input for this frame.
 
@@ -440,7 +440,7 @@ class Puck:
 
     # -- public API --------------------------------------------------------
 
-    def reset(self, state: int):
+    def reset(self, state):
         """
         Award a point then re-centre the puck.
         state > 0 → right paddle scores; state < 0 → left paddle scores.
@@ -454,7 +454,7 @@ class Puck:
         self.velocity.set(*_random_puck_velocity())
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
-    def update(self, dt: float):
+    def update(self, dt):
         self.position += self.velocity * dt
         self._collide()
         self._bounce()
@@ -501,7 +501,7 @@ class Puck:
             self.velocity.flip_x()           # flip to move left
             self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
-    def _between_paddle(self, paddle_pos) -> bool:
+    def _between_paddle(self, paddle_pos):
         """Return True when the puck's y-range overlaps *paddle_pos*."""
         half_h = PADDLE_HEIGHT / 2
         return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
@@ -563,7 +563,7 @@ class Game:
         """Display the title / mode-selection screen on the OLED."""
         _show_splash()
 
-    def step(self, data: dict, dt: float) -> bool:
+    def step(self, data, dt):
         """
         Advance the game by one frame using *data* as the control input.
 
@@ -588,7 +588,7 @@ class Game:
 
     # -- private -----------------------------------------------------------
 
-    def _step_splash(self, data: dict) -> bool:
+    def _step_splash(self, data):
         """Handle one frame while the splash / mode-selection screen is shown."""
         if data.get("quit"):
             self._do_quit()
@@ -603,7 +603,7 @@ class Game:
         # Any other (or missing) key: stay on splash, nothing to render.
         return True
 
-    def _step_play(self, data: dict, dt: float) -> bool:
+    def _step_play(self, data, dt):
         """Handle one frame of active gameplay."""
         # Clamp dt so the puck cannot skip across the display in one step.
         dt = min(float(dt), MAX_DT)
