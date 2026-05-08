@@ -63,7 +63,6 @@ The two flags are fully independent; any combination is valid:
 """
 
 import math
-import random
 import sys
 
 # ---------------------------------------------------------------------------
@@ -144,16 +143,78 @@ def _fill_rect_centered(x, y, w, h, color=1):
 
 def _random_puck_velocity():
     """
-    Return a random (vx, vy) launch direction for the puck after a reset.
+    Return the next (vx, vy) launch direction for the puck after a reset.
 
-    *vy* is uniform in [-1, 1].  *vx* is scaled by a random factor in
-    [1, 4] and given a random horizontal sign, ensuring the ball always
-    launches at a noticeable angle.  The returned vector is subsequently
-    normalised to PUCK_START_SPEED by the caller.
+    Instead of runtime random calls, the function cycles through a fixed
+    list of 50 pre-calculated velocity pairs.  This removes the dependency
+    on the ``random`` module entirely, which saves RAM and avoids the cost
+    of seeding an RNG on resource-constrained embedded targets.
+
+    The values were generated offline with the same formula that was used
+    previously (vy ∈ [-1, 1], vx scaled by a factor in [1, 4] with an
+    alternating sign) so the launch directions are well-distributed.
     """
-    vy = random.uniform(-1.0, 1.0)
-    vx = (random.random() * 3.0 + 1.0) * abs(vy) * random.choice([-1, 1])
+    global _PUCK_VEL_IDX
+    vx, vy = _PUCK_VELOCITIES[_PUCK_VEL_IDX % len(_PUCK_VELOCITIES)]
+    _PUCK_VEL_IDX += 1
     return vx, vy
+
+
+# Pre-calculated launch velocities – 50 entries, generated offline.
+# Each tuple is (vx, vy); the caller normalises the speed afterwards.
+_PUCK_VELOCITIES = [
+    ( 0.299777,  0.278854),
+    (-0.723800, -0.510216),
+    (-1.299285,  0.353399),
+    (-0.198242,  0.180985),
+    (-1.415851, -0.562724),
+    ( 0.385606,  0.122490),
+    (-1.547527, -0.559119),
+    ( 0.765541,  0.517615),
+    ( 0.468526, -0.319499),
+    ( 1.702367, -0.795579),
+    (-1.953737,  0.694989),
+    ( 1.198595,  0.459464),
+    ( 1.583319, -0.842400),
+    (-0.481705,  0.154704),
+    (-1.070532,  0.322527),
+    ( 2.557897,  0.710635),
+    ( 1.290885, -0.444053),
+    ( 1.393786, -0.674692),
+    (-1.231363,  0.403641),
+    (-0.330321,  0.218262),
+    (-1.439538, -0.673195),
+    (-1.302843,  0.369229),
+    ( 0.594090, -0.541904),
+    ( 0.236921, -0.197670),
+    ( 1.435542, -0.574747),
+    ( 1.013453, -0.714257),
+    ( 1.129002,  0.494028),
+    (-1.101814, -0.276007),
+    (-0.024249,  0.019053),
+    (-1.053354,  0.722206),
+    (-1.323984,  0.584159),
+    ( 0.642460, -0.230465),
+    (-0.227863,  0.058229),
+    ( 0.484477,  0.360567),
+    ( 1.085422,  0.537197),
+    ( 0.308061, -0.130469),
+    (-3.101142,  0.943776),
+    (-1.404513,  0.741037),
+    (-2.282604, -0.694321),
+    (-0.487959,  0.197889),
+    ( 3.120547,  0.858197),
+    (-0.897647, -0.521095),
+    (-2.036904, -0.828693),
+    (-2.483721,  0.955969),
+    (-1.802931, -0.743217),
+    ( 1.699721, -0.469887),
+    (-3.516844,  0.928726),
+    ( 0.935688,  0.425898),
+    (-0.316027, -0.123800),
+    (-0.601032, -0.504189),
+]
+_PUCK_VEL_IDX = 0
 
 
 # ---------------------------------------------------------------------------
