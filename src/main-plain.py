@@ -114,13 +114,13 @@ _PUCK_VEL_IDX = 0
 _ASCII_COLS = 64
 _ASCII_ROWS = 16
 
+def _ascii_col(px):
+    return min(_ASCII_COLS - 1, max(0, int(px * _ASCII_COLS / LCD_WIDTH)))
+
+def _ascii_row(py):
+    return min(_ASCII_ROWS - 1, max(0, int(py * _ASCII_ROWS / LCD_HEIGHT)))
+
 def _debug_print_frame(left, right, puck):
-    def _to_col(px):
-        return min(_ASCII_COLS - 1, max(0, int(px * _ASCII_COLS / LCD_WIDTH)))
-
-    def _to_row(py):
-        return min(_ASCII_ROWS - 1, max(0, int(py * _ASCII_ROWS / LCD_HEIGHT)))
-
     grid = [[' '] * _ASCII_COLS for _ in range(_ASCII_ROWS)]
 
     cx = _ASCII_COLS // 2
@@ -129,18 +129,18 @@ def _debug_print_frame(left, right, puck):
 
     paddle_half = max(1, int(PADDLE_HEIGHT * _ASCII_ROWS / LCD_HEIGHT / 2))
 
-    lx = _to_col(left.position.x)
-    ly = _to_row(left.position.y)
+    lx = _ascii_col(left.position.x)
+    ly = _ascii_row(left.position.y)
     for r in range(max(0, ly - paddle_half), min(_ASCII_ROWS, ly + paddle_half + 1)):
         grid[r][lx] = '|'
 
-    rx = _to_col(right.position.x)
-    ry = _to_row(right.position.y)
+    rx = _ascii_col(right.position.x)
+    ry = _ascii_row(right.position.y)
     for r in range(max(0, ry - paddle_half), min(_ASCII_ROWS, ry + paddle_half + 1)):
         grid[r][rx] = '|'
 
-    bx = _to_col(puck.position.x)
-    by = _to_row(puck.position.y)
+    bx = _ascii_col(puck.position.x)
+    by = _ascii_row(puck.position.y)
     grid[by][bx] = 'o'
 
     border = '+' + '-' * _ASCII_COLS + '+'
@@ -160,8 +160,6 @@ def _debug_print_frame(left, right, puck):
     sys.stdout.write('\n'.join(rows) + '\n')
 
 class Vector:
-
-    __slots__ = ("x", "y", "magnitude", "angle")
 
     def __init__(self, x=0.0, y=0.0):
         self.x = float(x)
@@ -192,15 +190,6 @@ class Vector:
         self.y = self.magnitude * math.sin(angle)
         self.angle = float(angle)
         return self
-
-    def __iadd__(self, other):
-        self.x += other.x
-        self.y += other.y
-        self._recalc()
-        return self
-
-    def __mul__(self, scalar):
-        return Vector(self.x * scalar, self.y * scalar)
 
     def flip_y(self):
         self.y *= -1
@@ -266,7 +255,9 @@ class Puck:
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
     def update(self, dt):
-        self.position += self.velocity * dt
+        self.position.x += self.velocity.x * dt
+        self.position.y += self.velocity.y * dt
+        self.position._recalc()
         self._collide()
         self._bounce()
         self._score()
