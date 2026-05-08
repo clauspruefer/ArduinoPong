@@ -1,23 +1,7 @@
 import math
-import sys
 
-OLED_OUTPUT = True
-
-ASCII_DEBUG = False
-
-if OLED_OUTPUT:
-    import ssd1306
-    from machine import I2C, Pin
-    SCL_PIN = 22
-    SDA_PIN = 21
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
-
-if OLED_OUTPUT:
-    i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
-    oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, i2c)
-else:
-    oled = None
 
 PADDLE_WIDTH = 4
 PADDLE_HEIGHT = 14
@@ -39,17 +23,6 @@ def _sign(val):
     if val < 0:
         return -1
     return 0
-
-def _fill_rect_centered(x, y, w, h, color=1):
-    ox = int(x - w / 2)
-    oy = int(y - h / 2)
-    x0 = max(0, ox)
-    y0 = max(0, oy)
-    rw = min(int(w), LCD_WIDTH - x0)
-    rh = min(int(h), LCD_HEIGHT - y0)
-    if rw > 0 and rh > 0:
-        if OLED_OUTPUT:
-            oled.fill_rect(x0, y0, rw, rh, color)
 
 def _random_puck_velocity():
     global _PUCK_VEL_IDX
@@ -110,54 +83,6 @@ _PUCK_VELOCITIES = [
     (-0.601032, -0.504189),
 ]
 _PUCK_VEL_IDX = 0
-
-_ASCII_COLS = 64
-_ASCII_ROWS = 16
-
-def _ascii_col(px):
-    return min(_ASCII_COLS - 1, max(0, int(px * _ASCII_COLS / LCD_WIDTH)))
-
-def _ascii_row(py):
-    return min(_ASCII_ROWS - 1, max(0, int(py * _ASCII_ROWS / LCD_HEIGHT)))
-
-def _debug_print_frame(left, right, puck):
-    grid = [[' '] * _ASCII_COLS for _ in range(_ASCII_ROWS)]
-
-    cx = _ASCII_COLS // 2
-    for r in range(_ASCII_ROWS):
-        grid[r][cx] = ':' if r % 2 == 0 else ' '
-
-    paddle_half = max(1, int(PADDLE_HEIGHT * _ASCII_ROWS / LCD_HEIGHT / 2))
-
-    lx = _ascii_col(left.position.x)
-    ly = _ascii_row(left.position.y)
-    for r in range(max(0, ly - paddle_half), min(_ASCII_ROWS, ly + paddle_half + 1)):
-        grid[r][lx] = '|'
-
-    rx = _ascii_col(right.position.x)
-    ry = _ascii_row(right.position.y)
-    for r in range(max(0, ry - paddle_half), min(_ASCII_ROWS, ry + paddle_half + 1)):
-        grid[r][rx] = '|'
-
-    bx = _ascii_col(puck.position.x)
-    by = _ascii_row(puck.position.y)
-    grid[by][bx] = 'o'
-
-    border = '+' + '-' * _ASCII_COLS + '+'
-    _SCORE_INDENT = 4
-    _SCORE_GAP = 7
-    pad = _ASCII_COLS // 2 - _SCORE_INDENT
-    score_line = (' ' * pad + str(left.score)
-                  + ' ' * _SCORE_GAP
-                  + str(right.score))
-    rows = ['\x1b[H',
-            score_line,
-            border]
-    for row in grid:
-        rows.append('|' + ''.join(row) + '|')
-    rows.append(border)
-
-    sys.stdout.write('\n'.join(rows) + '\n')
 
 class Vector:
 
@@ -238,10 +163,6 @@ class Paddle:
         half_h = PADDLE_HEIGHT / 2
         self.position.y = max(half_h, min(LCD_HEIGHT - half_h, self.position.y))
 
-    def show(self):
-        _fill_rect_centered(self.position.x, self.position.y,
-                            PADDLE_WIDTH, PADDLE_HEIGHT)
-
 class Puck:
 
     def __init__(self, left, right):
@@ -268,10 +189,6 @@ class Puck:
         self._collide()
         self._bounce()
         self._score()
-
-    def show(self):
-        size = PUCK_RADIUS * 2
-        _fill_rect_centered(self.position.x, self.position.y, size, size)
 
     def _score(self):
         if self.position.x > LCD_WIDTH + PUCK_RADIUS:
@@ -309,22 +226,6 @@ class Puck:
         return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
                 self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE < paddle_pos.y + half_h)
 
-def _draw_center_line():
-    y = 3
-    while y < LCD_HEIGHT - 2:
-        _fill_rect_centered(LCD_WIDTH / 2, y, 2, 2)
-        y += 4
-
-def _show_splash():
-    if OLED_OUTPUT:
-        oled.fill(0)
-        oled.text("ArduinoPong", 18, 2, 1)
-        oled.text("L:Single  R:Multi", 0, 16, 1)
-        oled.text("Up/Down = Move", 0, 28, 1)
-        oled.text("q = Quit", 0, 40, 1)
-        oled.text("By Warren James", 0, 54, 1)
-        oled.show()
-
 class Game:
 
     _SPLASH = 0
@@ -337,20 +238,17 @@ class Game:
         self.puck  = Puck(self.left, self.right)
         self._state = self._SPLASH
 
-    def show_splash(self):
-        _show_splash()
-
     def step(self, data, dt):
         if self._state == self._SPLASH:
             return self._step_splash(data)
         if self._state == self._PLAY:
             return self._step_play(data, dt)
-        return False
+        return ""
 
     def _step_splash(self, data):
         if data.get("quit"):
             self._do_quit()
-            return False
+            return ""
 
         start = data.get("start", "")
         if start == "single":
@@ -358,14 +256,14 @@ class Game:
             self._begin_play()
         elif start == "multi":
             self._begin_play()
-        return True
+        return ""
 
     def _step_play(self, data, dt):
         dt = min(float(dt), MAX_DT)
 
         if data.get("quit"):
             self._do_quit()
-            return False
+            return ""
 
         self.left.set_input(data.get("player1", "none"))
 
@@ -375,28 +273,18 @@ class Game:
         self.right.update(dt, self.puck)
         self.puck.update(dt)
 
-        if OLED_OUTPUT:
-            oled.fill(0)
-            _draw_center_line()
-            self.left.show()
-            self.right.show()
-            self.puck.show()
-            oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
-            oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
-            oled.show()
-
-        if ASCII_DEBUG:
-            _debug_print_frame(self.left, self.right, self.puck)
-
-        return True
+        return "%d,%d,%d,%d,%d,%d" % (
+            int(self.puck.position.x),
+            int(self.puck.position.y),
+            int(self.left.position.y),
+            int(self.right.position.y),
+            self.left.score,
+            self.right.score)
 
     def _begin_play(self):
         self._state = self._PLAY
 
     def _do_quit(self):
-        if OLED_OUTPUT:
-            oled.fill(0)
-            oled.show()
         self._state = self._QUIT
 
 _game = Game()

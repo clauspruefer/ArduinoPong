@@ -2,32 +2,21 @@
 ArduinoPong – MicroPython port
 ================================
 Original C++ source: src/main.cpp  (TI-84 CE / graphx + keypadc)
-Ported to:          MicroPython + SSD1306 OLED (128×64)
-
-Graphics
---------
-All drawing is done through the MicroPython ssd1306 library.
-The display is assumed to be a 128×64 I²C OLED wired to I2C bus 0
-(SCL = Pin 22, SDA = Pin 21 – adjust SCL_PIN / SDA_PIN below to match
-your hardware).
-
-The ball is drawn as a filled square (side = PUCK_RADIUS * 2) rather
-than a circle for simplicity and speed on constrained hardware.
 
 API – single-frame function
 ----------------------------
-This module exposes one public function, ``render_frame(data)``, that
-renders exactly one frame of the game.  The caller (a timer callback,
-a coroutine, or any other MicroPython scheduler) is responsible for
-calling it periodically – there is no loop inside this module.
+This module exposes one public function, ``render_frame(data, dt)``, that
+advances the game by one frame and returns a comma-separated string of
+all rendering-relevant state.  The caller is responsible for scheduling
+periodic invocations and for all rendering – there is no loop and no
+display output inside this module.
 
-    import pong          # name your copy of this module as you like
+    import pong
 
-    # Each call advances the game by one frame:
-    pong.render_frame({"start": "multi"})     # transition splash → play
-    pong.render_frame({"player1": "up"})      # move left paddle up
-    pong.render_frame({"player2": "down"})    # move right paddle down
-    pong.render_frame({"quit": True})         # end the game
+    state = pong.render_frame({"start": "multi"}, 0.05)
+    state = pong.render_frame({"player1": "up"},  0.05)
+    state = pong.render_frame({"player2": "down"}, 0.05)
+    state = pong.render_frame({"quit": True},      0.05)
 
 Accepted dict keys
   "start"   – "single" | "multi" | "quit"   (while splash is shown)
@@ -35,62 +24,21 @@ Accepted dict keys
   "player2" – "up" | "down" | "none"         (right paddle, during play)
   "quit"    – any truthy value               (end the game at any time)
 
-``render_frame(data, dt)`` returns True while the game is running and
-False once it has ended; the caller may stop further invocations at that
-point.  *dt* is the elapsed time in seconds since the previous call
-(e.g. 0.05 for a 20 Hz driver loop) – the module performs no time
-measurement of its own.
-
-Output mode flags (set at the top of this file)
--------------------------------------------------
-Two independent boolean flags control where the game renders:
-
-``OLED_OUTPUT`` (default ``True``)
-    Render each frame to the physical SSD1306 OLED.  Set to ``False`` when
-    running on a host PC / in an emulator / without hardware attached.  When
-    disabled the ``ssd1306`` and ``machine`` imports are skipped entirely.
-
-``ASCII_DEBUG`` (default ``False``)
-    Print a scaled ASCII representation of each frame to stdout.  Set to
-    ``True`` to debug over a serial / REPL connection.
-
-The two flags are fully independent; any combination is valid:
-
-    OLED_OUTPUT = True,  ASCII_DEBUG = False  →  OLED only   (default)
-    OLED_OUTPUT = False, ASCII_DEBUG = True   →  ASCII only
-    OLED_OUTPUT = True,  ASCII_DEBUG = True   →  OLED + ASCII
-    OLED_OUTPUT = False, ASCII_DEBUG = False  →  headless / no output
+Return value
+  A comma-separated string with six fields while the game is in play:
+    puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
+  An empty string ``""`` is returned during the splash screen or after
+  the game has ended.  The caller may stop further invocations when the
+  returned string is empty (after the game transitions away from splash).
 """
 
 import math
-import sys
 
 # ---------------------------------------------------------------------------
-# Output mode flags  –  adjust these before deploying
+# Display / game-field constants
 # ---------------------------------------------------------------------------
-# Render to the physical SSD1306 OLED (requires ssd1306 + machine).
-OLED_OUTPUT = True
-
-# Print an ASCII frame to stdout each tick (useful without hardware).
-ASCII_DEBUG = False
-
-# ---------------------------------------------------------------------------
-# Hardware / display constants  –  adjust to match your board
-# ---------------------------------------------------------------------------
-
-if OLED_OUTPUT:
-    import ssd1306
-    from machine import I2C, Pin
-    SCL_PIN = 22
-    SDA_PIN = 21
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
-
-if OLED_OUTPUT:
-    i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN))
-    oled = ssd1306.SSD1306_I2C(LCD_WIDTH, LCD_HEIGHT, i2c)
-else:
-    oled = None
 
 # ---------------------------------------------------------------------------
 # Paddle geometry constants  (scaled from 320×240 → 128×64)
@@ -131,20 +79,6 @@ def _sign(val):
     if val < 0:
         return -1
     return 0
-
-
-def _fill_rect_centered(x, y, w, h, color=1):
-    """Draw a filled rectangle centred on (x, y) with size (w, h)."""
-    ox = int(x - w / 2)
-    oy = int(y - h / 2)
-    # Clamp to display bounds
-    x0 = max(0, ox)
-    y0 = max(0, oy)
-    rw = min(int(w), LCD_WIDTH - x0)
-    rh = min(int(h), LCD_HEIGHT - y0)
-    if rw > 0 and rh > 0:
-        if OLED_OUTPUT:
-            oled.fill_rect(x0, y0, rw, rh, color)
 
 
 def _random_puck_velocity():
@@ -221,91 +155,6 @@ _PUCK_VELOCITIES = [
     (-0.601032, -0.504189),
 ]
 _PUCK_VEL_IDX = 0
-
-
-# ---------------------------------------------------------------------------
-# ASCII debug renderer
-# ---------------------------------------------------------------------------
-
-# Dimensions of the ASCII frame in characters.
-_ASCII_COLS = 64
-_ASCII_ROWS = 16
-
-
-def _ascii_col(px):
-    """Map a pixel x-coordinate to an ASCII column index."""
-    return min(_ASCII_COLS - 1, max(0, int(px * _ASCII_COLS / LCD_WIDTH)))
-
-
-def _ascii_row(py):
-    """Map a pixel y-coordinate to an ASCII row index."""
-    return min(_ASCII_ROWS - 1, max(0, int(py * _ASCII_ROWS / LCD_HEIGHT)))
-
-
-def _debug_print_frame(left, right, puck):
-    """
-    Print a scaled-down ASCII art representation of the current game frame
-    to stdout.
-
-    Each character cell covers (LCD_WIDTH / _ASCII_COLS) × (LCD_HEIGHT /
-    _ASCII_ROWS) pixels.  The output is prefixed with ANSI cursor-home so
-    successive frames overwrite each other in a capable terminal emulator;
-    on plain serial monitors each frame is simply appended.
-
-    Symbols used
-      |   paddle (left or right)
-      o   ball
-      :   centre-line dash (alternating rows)
-      -   top / bottom border
-      +   corner
-    """
-    # Build blank grid
-    grid = [[' '] * _ASCII_COLS for _ in range(_ASCII_ROWS)]
-
-    # Centre dashed line
-    cx = _ASCII_COLS // 2
-    for r in range(_ASCII_ROWS):
-        grid[r][cx] = ':' if r % 2 == 0 else ' '
-
-    # Paddle height in ASCII rows (proportional)
-    paddle_half = max(1, int(PADDLE_HEIGHT * _ASCII_ROWS / LCD_HEIGHT / 2))
-
-    # Left paddle
-    lx = _ascii_col(left.position.x)
-    ly = _ascii_row(left.position.y)
-    for r in range(max(0, ly - paddle_half), min(_ASCII_ROWS, ly + paddle_half + 1)):
-        grid[r][lx] = '|'
-
-    # Right paddle
-    rx = _ascii_col(right.position.x)
-    ry = _ascii_row(right.position.y)
-    for r in range(max(0, ry - paddle_half), min(_ASCII_ROWS, ry + paddle_half + 1)):
-        grid[r][rx] = '|'
-
-    # Ball
-    bx = _ascii_col(puck.position.x)
-    by = _ascii_row(puck.position.y)
-    grid[by][bx] = 'o'
-
-    # Compose lines
-    border = '+' + '-' * _ASCII_COLS + '+'
-    # Left score is placed slightly left of centre; right score to the right.
-    # _SCORE_INDENT shifts both numbers away from the midpoint so they sit
-    # roughly above their respective halves of the field.
-    _SCORE_INDENT = 4
-    _SCORE_GAP = 7   # spaces between the two score numbers
-    pad = _ASCII_COLS // 2 - _SCORE_INDENT
-    score_line = (' ' * pad + str(left.score)
-                  + ' ' * _SCORE_GAP
-                  + str(right.score))
-    rows = ['\x1b[H',  # ANSI cursor-home (ignored on plain serial)
-            score_line,
-            border]
-    for row in grid:
-        rows.append('|' + ''.join(row) + '|')
-    rows.append(border)
-
-    sys.stdout.write('\n'.join(rows) + '\n')
 
 
 # ---------------------------------------------------------------------------
@@ -416,10 +265,6 @@ class Paddle:
         half_h = PADDLE_HEIGHT / 2
         self.position.y = max(half_h, min(LCD_HEIGHT - half_h, self.position.y))
 
-    def show(self):
-        _fill_rect_centered(self.position.x, self.position.y,
-                            PADDLE_WIDTH, PADDLE_HEIGHT)
-
 
 # ---------------------------------------------------------------------------
 # Puck
@@ -458,11 +303,6 @@ class Puck:
         self._collide()
         self._bounce()
         self._score()
-
-    def show(self):
-        """Draw the ball as a filled square (side = PUCK_RADIUS * 2)."""
-        size = PUCK_RADIUS * 2
-        _fill_rect_centered(self.position.x, self.position.y, size, size)
 
     # -- private -----------------------------------------------------------
 
@@ -508,30 +348,6 @@ class Puck:
 
 
 # ---------------------------------------------------------------------------
-# Drawing helpers
-# ---------------------------------------------------------------------------
-
-def _draw_center_line():
-    """Dashed vertical centre line."""
-    y = 3
-    while y < LCD_HEIGHT - 2:
-        _fill_rect_centered(LCD_WIDTH / 2, y, 2, 2)
-        y += 4
-
-
-def _show_splash():
-    """Title / mode-selection screen."""
-    if OLED_OUTPUT:
-        oled.fill(0)
-        oled.text("ArduinoPong", 18, 2, 1)
-        oled.text("L:Single  R:Multi", 0, 16, 1)
-        oled.text("Up/Down = Move", 0, 28, 1)
-        oled.text("q = Quit", 0, 40, 1)
-        oled.text("By Warren James", 0, 54, 1)
-        oled.show()
-
-
-# ---------------------------------------------------------------------------
 # Game – public API
 # ---------------------------------------------------------------------------
 
@@ -558,10 +374,6 @@ class Game:
 
     # -- public ------------------------------------------------------------
 
-    def show_splash(self):
-        """Display the title / mode-selection screen on the OLED."""
-        _show_splash()
-
     def step(self, data, dt):
         """
         Advance the game by one frame using *data* as the control input.
@@ -576,14 +388,16 @@ class Game:
         *dt* is the elapsed time in seconds since the previous call.
         The caller is responsible for all time measurement.
 
-        Returns True while the game should keep running, False once it has
-        ended (caller should stop issuing further ``step()`` calls).
+        Returns a comma-separated string with six fields during play:
+          puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
+        Returns an empty string ``""`` during the splash screen or after
+        the game has ended.
         """
         if self._state == self._SPLASH:
             return self._step_splash(data)
         if self._state == self._PLAY:
             return self._step_play(data, dt)
-        return False   # _QUIT
+        return ""   # _QUIT
 
     # -- private -----------------------------------------------------------
 
@@ -591,7 +405,7 @@ class Game:
         """Handle one frame while the splash / mode-selection screen is shown."""
         if data.get("quit"):
             self._do_quit()
-            return False
+            return ""
 
         start = data.get("start", "")
         if start == "single":
@@ -599,8 +413,8 @@ class Game:
             self._begin_play()
         elif start == "multi":
             self._begin_play()
-        # Any other (or missing) key: stay on splash, nothing to render.
-        return True
+        # Any other (or missing) key: stay on splash.
+        return ""
 
     def _step_play(self, data, dt):
         """Handle one frame of active gameplay."""
@@ -609,7 +423,7 @@ class Game:
 
         if data.get("quit"):
             self._do_quit()
-            return False
+            return ""
 
         # Apply player input
         self.left.set_input(data.get("player1", "none"))
@@ -621,33 +435,22 @@ class Game:
         self.right.update(dt, self.puck)
         self.puck.update(dt)
 
-        # Render to OLED
-        if OLED_OUTPUT:
-            oled.fill(0)
-            _draw_center_line()
-            self.left.show()
-            self.right.show()
-            self.puck.show()
-            # Scores: left score left of centre, right score right of centre
-            oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
-            oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
-            oled.show()
-
-        # ASCII debug reads game-state directly; no show() calls needed here.
-        if ASCII_DEBUG:
-            _debug_print_frame(self.left, self.right, self.puck)
-
-        return True
+        # Return game state as comma-separated string:
+        # puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
+        return "%d,%d,%d,%d,%d,%d" % (
+            int(self.puck.position.x),
+            int(self.puck.position.y),
+            int(self.left.position.y),
+            int(self.right.position.y),
+            self.left.score,
+            self.right.score)
 
     def _begin_play(self):
         """Transition from splash to active play."""
         self._state = self._PLAY
 
     def _do_quit(self):
-        """Clear the display and mark the game as finished."""
-        if OLED_OUTPUT:
-            oled.fill(0)
-            oled.show()
+        """Mark the game as finished."""
         self._state = self._QUIT
 
 
@@ -661,13 +464,12 @@ _game = Game()
 
 def render_frame(data, dt):
     """
-    Render exactly one frame of the game.
+    Advance the game by one frame and return the current rendering state.
 
     Parameters
     ----------
     data : dict
-        Control input for this frame.  Construct it from hardware button
-        states, BLE packets, or any other source.  Recognised keys:
+        Control input for this frame.  Recognised keys:
 
           "start"   – "single" | "multi" | "quit"  (while splash is shown)
           "player1" – "up" | "down" | "none"        (left paddle)
@@ -680,9 +482,11 @@ def render_frame(data, dt):
 
     Returns
     -------
-    bool
-        True while the game is running; False once the game has ended.
-        The caller may stop issuing further calls when False is returned.
+    str
+        A comma-separated string with six fields during active play:
+          puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
+        An empty string ``""`` is returned during the splash screen or
+        after the game has ended.
 
     Notes
     -----
