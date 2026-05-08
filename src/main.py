@@ -379,16 +379,22 @@ class Paddle:
         self._up = False
         self._down = False
 
-    def set_input(self, up, down):
+    def set_input(self, direction):
         """
-        Apply JSON-sourced directional input for this frame.
+        Apply directional input for this frame.
 
-        *up* and *down* are expected to be the result of boolean expressions
-        (e.g. ``p1 == "up"``), not raw strings.  Both may be False to
-        indicate no movement.
+        *direction* is a plain string: ``"up"``, ``"down"``, or anything
+        else (including ``"none"``) to stop.
         """
-        self._up = up
-        self._down = down
+        if direction == "up":
+            self._up = True
+            self._down = False
+        elif direction == "down":
+            self._up = False
+            self._down = True
+        else:
+            self._up = False
+            self._down = False
 
     def update(self, dt, puck):
         if self.is_auto:
@@ -606,11 +612,9 @@ class Game:
             return False
 
         # Apply player input
-        p1 = data.get("player1", "none")
-        self.left.set_input(p1 == "up", p1 == "down")
+        self.left.set_input(data.get("player1", "none"))
 
-        p2 = data.get("player2", "none")
-        self.right.set_input(p2 == "up", p2 == "down")
+        self.right.set_input(data.get("player2", "none"))
 
         # Update game state
         self.left.update(dt, self.puck)

@@ -211,9 +211,16 @@ class Paddle:
         self._up = False
         self._down = False
 
-    def set_input(self, up, down):
-        self._up = up
-        self._down = down
+    def set_input(self, direction):
+        if direction == "up":
+            self._up = True
+            self._down = False
+        elif direction == "down":
+            self._up = False
+            self._down = True
+        else:
+            self._up = False
+            self._down = False
 
     def update(self, dt, puck):
         if self.is_auto:
@@ -361,10 +368,10 @@ class Game:
             return False
 
         p1 = data.get("player1", "none")
-        self.left.set_input(p1 == "up", p1 == "down")
+        self.left.set_input(p1)
 
         p2 = data.get("player2", "none")
-        self.right.set_input(p2 == "up", p2 == "down")
+        self.right.set_input(p2)
 
         self.left.update(dt, self.puck)
         self.right.update(dt, self.puck)
