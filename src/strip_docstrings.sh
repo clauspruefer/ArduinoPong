@@ -81,12 +81,12 @@ for line in out:
         prev_blank = False
 
 # strip leading blank lines
-while result and result[0].strip() == "":
-    result.pop(0)
+first = next((i for i, ln in enumerate(result) if ln.strip()), len(result))
+result = result[first:]
 
 # normalise to single trailing newline
-while result and result[-1].strip() == "":
-    result.pop()
+last = next((i for i, ln in enumerate(reversed(result)) if ln.strip()), 0)
+result = result[:len(result) - last] if last else result
 result.append("\n")
 
 with open(dst_path, "w") as fh:
