@@ -248,7 +248,7 @@ class Paddle:
 
 class Puck:
 
-    def __init__(self, left: Paddle, right: Paddle):
+    def __init__(self, left, right):
         self.position = Vector()
         self.velocity = Vector()
         self.left = left

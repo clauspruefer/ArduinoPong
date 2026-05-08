@@ -431,7 +431,7 @@ class Paddle:
 class Puck:
     """The ball – handles movement, bouncing, collision, and scoring."""
 
-    def __init__(self, left: Paddle, right: Paddle):
+    def __init__(self, left, right):
         self.position = Vector()
         self.velocity = Vector()
         self.left = left

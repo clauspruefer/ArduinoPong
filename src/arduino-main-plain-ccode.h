@@ -252,7 +252,7 @@ static const char *arduino_pong_code =
     "\n"
     "class Puck:\n"
     "\n"
-    "    def __init__(self, left: Paddle, right: Paddle):\n"
+    "    def __init__(self, left, right):\n"
     "        self.position = Vector()\n"
     "        self.velocity = Vector()\n"
     "        self.left = left\n"
