@@ -29,6 +29,8 @@ PUCK_START_SPEED = 40
 PUCK_PLAY_SPEED = 120
 PUCK_RADIUS = 2
 
+MAX_DT = 0.05
+
 COLLISION_TOLERANCE = 3
 
 def _sign(val):
@@ -361,6 +363,8 @@ class Game:
         return True
 
     def _step_play(self, data: dict, dt: float) -> bool:
+        dt = min(float(dt), MAX_DT)
+
         if data.get("quit"):
             self._do_quit()
             return False

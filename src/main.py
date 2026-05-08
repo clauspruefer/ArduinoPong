@@ -108,6 +108,12 @@ PUCK_START_SPEED = 40    # pixels / second after reset
 PUCK_PLAY_SPEED = 120    # pixels / second after paddle hit
 PUCK_RADIUS = 2
 
+# Maximum physics time-step accepted by _step_play().  Any dt larger than
+# this is silently clamped so the puck cannot jump across the whole display
+# in one frame.  At PUCK_PLAY_SPEED = 120 px/s the puck travels at most
+# 120 × 0.05 = 6 px per step, which keeps collision detection reliable.
+MAX_DT = 0.05            # seconds (~20 FPS floor)
+
 # Extra vertical tolerance added to each side of the paddle when checking
 # whether the puck is "between" a paddle (prevents the ball tunnelling
 # through at shallow angles).
@@ -599,6 +605,9 @@ class Game:
 
     def _step_play(self, data: dict, dt: float) -> bool:
         """Handle one frame of active gameplay."""
+        # Clamp dt so the puck cannot skip across the display in one step.
+        dt = min(float(dt), MAX_DT)
+
         if data.get("quit"):
             self._do_quit()
             return False
