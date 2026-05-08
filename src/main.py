@@ -635,15 +635,8 @@ class Game:
             oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
             oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
             oled.show()
-        else:
-            # Non-OLED path: only run show() calls when ASCII_DEBUG needs them.
-            if ASCII_DEBUG:
-                _draw_center_line()
-                self.left.show()
-                self.right.show()
-                self.puck.show()
 
-        # Optional ASCII debug output to stdout
+        # ASCII debug reads game-state directly; no show() calls needed here.
         if ASCII_DEBUG:
             _debug_print_frame(self.left, self.right, self.puck)
 

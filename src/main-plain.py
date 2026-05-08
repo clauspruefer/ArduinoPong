@@ -388,12 +388,6 @@ class Game:
             oled.text(str(self.left.score),  LCD_WIDTH // 2 - 12, 2, 1)
             oled.text(str(self.right.score), LCD_WIDTH // 2 + 6,  2, 1)
             oled.show()
-        else:
-            if ASCII_DEBUG:
-                _draw_center_line()
-                self.left.show()
-                self.right.show()
-                self.puck.show()
 
         if ASCII_DEBUG:
             _debug_print_frame(self.left, self.right, self.puck)
