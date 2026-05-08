@@ -33,6 +33,10 @@ Return value
 """
 
 import math
+try:
+    import ujson as _json
+except ImportError:
+    import json as _json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -386,7 +390,7 @@ class Game:
         """
         Advance the game by one frame using *data* as the control input.
 
-        *data* is a plain dict.  Recognised keys:
+        *data* is a plain dict or a JSON string.  Recognised keys:
 
           "start"   – "single" | "multi" | "quit"  (while showing splash)
           "player1" – "up" | "down" | "none"        (left paddle, during play)
@@ -401,6 +405,8 @@ class Game:
         Returns an empty string ``""`` during the splash screen or after
         the game has ended.
         """
+        if isinstance(data, str):
+            data = _json.loads(data)
         if self._state == _STATE_SPLASH:
             return self._step_splash(data)
         if self._state == _STATE_PLAY:
@@ -476,8 +482,10 @@ def render_frame(data, dt):
 
     Parameters
     ----------
-    data : dict
-        Control input for this frame.  Recognised keys:
+    data : dict or str
+        Control input for this frame.  May be a plain ``dict`` or a JSON
+        string – if a string is supplied it is decoded with ``ujson`` /
+        ``json`` before processing.  Recognised keys:
 
           "start"   – "single" | "multi" | "quit"  (while splash is shown)
           "player1" – "up" | "down" | "none"        (left paddle)

@@ -3,6 +3,10 @@
 
 static const char *arduino_pong_code =
     "import math\n"
+    "try:\n"
+    "    import ujson as _json\n"
+    "except ImportError:\n"
+    "    import json as _json\n"
     "\n"
     "LCD_WIDTH = 128\n"
     "LCD_HEIGHT = 64\n"
@@ -248,6 +252,8 @@ static const char *arduino_pong_code =
     "        self._state = _STATE_SPLASH\n"
     "\n"
     "    def step(self, data, dt):\n"
+    "        if isinstance(data, str):\n"
+    "            data = _json.loads(data)\n"
     "        if self._state == _STATE_SPLASH:\n"
     "            return self._step_splash(data)\n"
     "        if self._state == _STATE_PLAY:\n"

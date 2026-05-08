@@ -1,4 +1,8 @@
 import math
+try:
+    import ujson as _json
+except ImportError:
+    import json as _json
 
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
@@ -244,6 +248,8 @@ class Game:
         self._state = _STATE_SPLASH
 
     def step(self, data, dt):
+        if isinstance(data, str):
+            data = _json.loads(data)
         if self._state == _STATE_SPLASH:
             return self._step_splash(data)
         if self._state == _STATE_PLAY:
