@@ -35,11 +35,11 @@ Accepted dict keys
   "player2" – "up" | "down" | "none"         (right paddle, during play)
   "quit"    – any truthy value               (end the game at any time)
 
-``render_frame()`` returns True while the game is running and False once
-it has ended; the caller may stop further invocations at that point.
-
-The optional helper ``read_json()`` is provided for callers that source
-input from sys.stdin rather than constructing dicts directly.
+``render_frame(data, dt)`` returns True while the game is running and
+False once it has ended; the caller may stop further invocations at that
+point.  *dt* is the elapsed time in seconds since the previous call
+(e.g. 0.05 for a 20 Hz driver loop) – the module performs no time
+measurement of its own.
 
 Output mode flags (set at the top of this file)
 -------------------------------------------------
@@ -62,11 +62,9 @@ The two flags are fully independent; any combination is valid:
     OLED_OUTPUT = False, ASCII_DEBUG = False  →  headless / no output
 """
 
-import json
 import math
 import random
 import sys
-import time
 
 # ---------------------------------------------------------------------------
 # Output mode flags  –  adjust these before deploying
@@ -116,10 +114,6 @@ PUCK_RADIUS = 2
 # through at shallow angles).
 COLLISION_TOLERANCE = 3
 
-# Suggested interval between ``read_json()`` / ``Game.step()`` calls when
-# polling stdin in a custom driver loop (milliseconds).
-INPUT_POLL_INTERVAL_MS = 50
-
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -160,30 +154,6 @@ def _random_puck_velocity():
     vy = random.uniform(-1.0, 1.0)
     vx = (random.random() * 3.0 + 1.0) * abs(vy) * random.choice([-1, 1])
     return vx, vy
-
-
-def read_json():
-    """
-    Convenience helper: try to read one JSON line from stdin without blocking.
-
-    Returns a dict suitable for passing directly to ``Game.step()``, or {}
-    when no data is available.  Callers that source input from another
-    channel (GPIO buttons, BLE, etc.) can ignore this function entirely.
-    """
-    try:
-        import select
-        ready, _, _ = select.select([sys.stdin], [], [], 0)
-        if not ready:
-            return {}
-    except (ImportError, OSError):
-        pass
-    try:
-        line = sys.stdin.readline()
-        if line:
-            return json.loads(line.strip())
-    except (ValueError, OSError):
-        pass
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -518,8 +488,7 @@ class Game:
         self.left  = Paddle(PADDLE_BORDER)
         self.right = Paddle(LCD_WIDTH - PADDLE_BORDER)
         self.puck  = Puck(self.left, self.right)
-        self._state   = self._SPLASH
-        self._last_ms = time.ticks_ms()
+        self._state = self._SPLASH
 
     # -- public ------------------------------------------------------------
 
@@ -527,17 +496,19 @@ class Game:
         """Display the title / mode-selection screen on the OLED."""
         _show_splash()
 
-    def step(self, data: dict) -> bool:
+    def step(self, data: dict, dt: float) -> bool:
         """
         Advance the game by one frame using *data* as the control input.
 
-        *data* is a plain dict (e.g. the result of ``json.loads()`` or
-        ``read_json()``).  Recognised keys:
+        *data* is a plain dict.  Recognised keys:
 
           "start"   – "single" | "multi" | "quit"  (while showing splash)
           "player1" – "up" | "down" | "none"        (left paddle, during play)
           "player2" – "up" | "down" | "none"        (right paddle, during play)
           "quit"    – any truthy value              (exit at any time)
+
+        *dt* is the elapsed time in seconds since the previous call.
+        The caller is responsible for all time measurement.
 
         Returns True while the game should keep running, False once it has
         ended (caller should stop issuing further ``step()`` calls).
@@ -545,7 +516,7 @@ class Game:
         if self._state == self._SPLASH:
             return self._step_splash(data)
         if self._state == self._PLAY:
-            return self._step_play(data)
+            return self._step_play(data, dt)
         return False   # _QUIT
 
     # -- private -----------------------------------------------------------
@@ -565,16 +536,11 @@ class Game:
         # Any other (or missing) key: stay on splash, nothing to render.
         return True
 
-    def _step_play(self, data: dict) -> bool:
+    def _step_play(self, data: dict, dt: float) -> bool:
         """Handle one frame of active gameplay."""
         if data.get("quit"):
             self._do_quit()
             return False
-
-        # Elapsed time since last step (seconds)
-        now_ms = time.ticks_ms()
-        dt = time.ticks_diff(now_ms, self._last_ms) / 1000.0
-        self._last_ms = now_ms
 
         # Apply player input
         p1 = data.get("player1", "none")
@@ -614,9 +580,8 @@ class Game:
         return True
 
     def _begin_play(self):
-        """Transition from splash to active play, resetting the frame timer."""
-        self._state   = self._PLAY
-        self._last_ms = time.ticks_ms()
+        """Transition from splash to active play."""
+        self._state = self._PLAY
 
     def _do_quit(self):
         """Clear the display and mark the game as finished."""
@@ -634,21 +599,24 @@ class Game:
 _game = Game()
 
 
-def render_frame(data):
+def render_frame(data, dt):
     """
     Render exactly one frame of the game.
 
     Parameters
     ----------
     data : dict
-        Control input for this frame.  Construct it from a JSON string with
-        ``json.loads()``, from hardware button states, or any other source.
-        Recognised keys:
+        Control input for this frame.  Construct it from hardware button
+        states, BLE packets, or any other source.  Recognised keys:
 
           "start"   – "single" | "multi" | "quit"  (while splash is shown)
           "player1" – "up" | "down" | "none"        (left paddle)
           "player2" – "up" | "down" | "none"        (right paddle)
           "quit"    – any truthy value              (end the game)
+
+    dt : float
+        Elapsed time in seconds since the previous call.  The caller is
+        responsible for all time measurement; this module does none.
 
     Returns
     -------
@@ -662,4 +630,4 @@ def render_frame(data):
     scheduling periodic invocations (e.g. via a MicroPython timer,
     coroutine, or ``uasyncio`` task).
     """
-    return _game.step(data)
+    return _game.step(data, dt)
