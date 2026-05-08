@@ -359,7 +359,6 @@ static const char *arduino_pong_code =
     "\n"
     "def render_frame(data, dt):\n"
     "    return _game.step(data, dt)\n"
-    "\n"
-    ;
+    "\n";
 
 #endif

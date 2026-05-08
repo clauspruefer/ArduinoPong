@@ -37,11 +37,10 @@ out.append(f"#define {guard}")
 out.append("")
 out.append("static const char *arduino_pong_code =")
 
-for line in lines:
+for i, line in enumerate(lines):
     escaped = line.replace("\\", "\\\\").replace('"', '\\"')
-    out.append(f'    "{escaped}\\n"')
-
-out.append("    ;")
+    suffix = ";" if i == len(lines) - 1 else ""
+    out.append(f'    "{escaped}\\n"{suffix}')
 out.append("")
 out.append(f"#endif")
 
