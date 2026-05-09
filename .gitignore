@@ -4,3 +4,4 @@ src/gfx/*.c
 src/gfx/*.h
 
 media/
+src/__pycache__/
