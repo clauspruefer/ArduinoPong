@@ -33,10 +33,7 @@ Return value
 """
 
 import math
-try:
-    import ujson as json
-except ImportError:
-    import json
+import json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -336,14 +333,12 @@ class Puck:
         on_right = self.position.x + PUCK_RADIUS > self.right.position.x - half_w
 
         if on_left and self._between_paddle(self.left.position):
-            angle = ((self.position.y - (self.left.position.y - half_h))
-                     / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
+            angle = ((self.position.y - (self.left.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
             self.velocity.set_angle(angle)
             self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
         if on_right and self._between_paddle(self.right.position):
-            angle = ((self.position.y - (self.right.position.y - half_h))
-                     / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
+            angle = ((self.position.y - (self.right.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
             self.velocity.set_angle(angle)
             self.velocity.flip_x()           # flip to move left
             self.velocity.set_magnitude(PUCK_PLAY_SPEED)
@@ -364,8 +359,8 @@ class Puck:
 # Game state constants (module-level for reliable access in MicroPython)
 # ---------------------------------------------------------------------------
 _STATE_SPLASH = 0
-_STATE_PLAY   = 1
-_STATE_QUIT   = 2
+_STATE_PLAY = 1
+_STATE_QUIT = 2
 
 
 # ---------------------------------------------------------------------------
@@ -436,9 +431,6 @@ class Game:
 
     def _step_play(self, data, dt):
         """Handle one frame of active gameplay."""
-        # Clamp dt so the puck cannot skip across the display in one step.
-        dt = min(float(dt), MAX_DT)
-
         if data.get("quit"):
             self._do_quit()
             return ""
