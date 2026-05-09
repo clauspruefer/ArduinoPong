@@ -33,10 +33,7 @@ Return value
 """
 
 import math
-try:
-    import ujson as json
-except ImportError:
-    import json
+import json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -78,15 +75,11 @@ COLLISION_TOLERANCE = 3
 
 def _sign(val):
     """Return +1, -1, or 0 for the sign of *val*."""
-    try:
-        if val > 0:
-            return 1
-        if val < 0:
-            return -1
-        return 0
-    except Exception as _er:
-        print("_sign", repr(_er))
-        return 0
+    if val > 0:
+        return 1
+    if val < 0:
+        return -1
+    return 0
 
 
 # Pre-calculated launch velocities – 50 entries, generated offline.
@@ -153,81 +146,55 @@ class Vector:
     """2-D vector with magnitude / angle helpers."""
 
     def __init__(self, x=0.0, y=0.0):
-        try:
-            self.x = float(x)
-            self.y = float(y)
-            self.magnitude = 0.0
-            self.angle = 0.0
-            self._recalc()
-        except Exception as _er:
-            print("Vector.__init__", repr(_er))
+        self.x = float(x)
+        self.y = float(y)
+        self.magnitude = 0.0
+        self.angle = 0.0
+        self._recalc()
 
     # -- internal ----------------------------------------------------------
 
     def _recalc(self):
-        try:
-            self.magnitude = math.sqrt(self.x * self.x + self.y * self.y)
-            if self.magnitude:
-                self.angle = math.atan2(self.y, self.x)
-            else:
-                self.angle = 0.0
-        except Exception as _er:
-            print("Vector._recalc", repr(_er))
+        self.magnitude = math.sqrt(self.x * self.x + self.y * self.y)
+        if self.magnitude:
+            self.angle = math.atan2(self.y, self.x)
+        else:
+            self.angle = 0.0
 
     # -- mutators ----------------------------------------------------------
 
     def set(self, x, y):
-        try:
-            self.x, self.y = float(x), float(y)
-            self._recalc()
-            return self
-        except Exception as _er:
-            print("Vector.set", repr(_er))
-            return self
+        self.x, self.y = float(x), float(y)
+        self._recalc()
+        return self
 
     def set_magnitude(self, mag):
         """Scale the vector so its length equals *mag*."""
-        try:
-            if self.magnitude:
-                scale = float(mag) / self.magnitude
-                self.x = self.x * scale
-                self.y = self.y * scale
-            self.magnitude = float(mag)
-            return self
-        except Exception as _er:
-            print("Vector.set_magnitude", repr(_er))
-            return self
+        if self.magnitude:
+            scale = float(mag) / self.magnitude
+            self.x = self.x * scale
+            self.y = self.y * scale
+        self.magnitude = float(mag)
+        return self
 
     def set_angle(self, angle):
         """Rotate the vector to *angle* radians (keeping current magnitude)."""
-        try:
-            self.x = self.magnitude * math.cos(angle)
-            self.y = self.magnitude * math.sin(angle)
-            self.angle = float(angle)
-            return self
-        except Exception as _er:
-            print("Vector.set_angle", repr(_er))
-            return self
+        self.x = self.magnitude * math.cos(angle)
+        self.y = self.magnitude * math.sin(angle)
+        self.angle = float(angle)
+        return self
 
     def flip_y(self):
         """Negate the y component and update magnitude / angle."""
-        try:
-            self.y = 0.0 - self.y
-            self._recalc()
-            return self
-        except Exception as _er:
-            print("Vector.flip_y", repr(_er))
-            return self
+        self.y = 0.0 - self.y
+        self._recalc()
+        return self
 
     def flip_x(self):
         """Negate the x component and update magnitude / angle."""
-        try:
-            self.x = 0.0 - self.x
-            self._recalc()
-            return self
-        except Exception as _er:
-            print("Vector.flip_x", repr(_er))
-            return self
+        self.x = 0.0 - self.x
+        self._recalc()
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -238,15 +205,12 @@ class Paddle:
     """A player-controlled (or AI-controlled) paddle."""
 
     def __init__(self, x):
-        try:
-            self.position = Vector(x, LCD_HEIGHT / 2)
-            self.speed = PADDLE_SPEED
-            self.score = 0
-            self.is_auto = False   # True → AI drives this paddle
-            self._up = False
-            self._down = False
-        except Exception as _er:
-            print("Paddle.__init__", repr(_er))
+        self.position = Vector(x, LCD_HEIGHT / 2)
+        self.speed = PADDLE_SPEED
+        self.score = 0
+        self.is_auto = False   # True → AI drives this paddle
+        self._up = False
+        self._down = False
 
     def set_input(self, direction):
         """
@@ -255,50 +219,44 @@ class Paddle:
         *direction* is a plain string: ``"up"``, ``"down"``, or anything
         else (including ``"none"``) to stop.
         """
-        try:
-            if direction == "up":
-                self._up = True
-                self._down = False
-            elif direction == "down":
-                self._up = False
-                self._down = True
-            else:
-                self._up = False
-                self._down = False
-        except Exception as _er:
-            print("Paddle.set_input", repr(_er))
+        if direction == "up":
+            self._up = True
+            self._down = False
+        elif direction == "down":
+            self._up = False
+            self._down = True
+        else:
+            self._up = False
+            self._down = False
 
     def update(self, dt, puck):
-        try:
-            if self.is_auto:
-                self.speed = PADDLE_AUTO_SPEED
-                # Track the puck only when it is heading toward this paddle.
-                # When _sign() returns 0 (puck moving purely vertically) or the
-                # signs differ (puck moving away), the paddle holds its position.
-                if _sign(self.position.x - puck.position.x) == _sign(puck.velocity.x):
-                    diff = puck.position.y - self.position.y
-                    if diff < -self.speed * dt:
-                        self.position.y = self.position.y - self.speed * dt
-                    elif diff > self.speed * dt:
-                        self.position.y = self.position.y + self.speed * dt
-            else:
-                direction = 0   # no key pressed → stationary
-                if self._up:
-                    direction = -1
-                elif self._down:
-                    direction = 1
-                self.position.y = self.position.y + self.speed * dt * direction
+        if self.is_auto:
+            self.speed = PADDLE_AUTO_SPEED
+            # Track the puck only when it is heading toward this paddle.
+            # When _sign() returns 0 (puck moving purely vertically) or the
+            # signs differ (puck moving away), the paddle holds its position.
+            if _sign(self.position.x - puck.position.x) == _sign(puck.velocity.x):
+                diff = puck.position.y - self.position.y
+                if diff < -self.speed * dt:
+                    self.position.y = self.position.y - self.speed * dt
+                elif diff > self.speed * dt:
+                    self.position.y = self.position.y + self.speed * dt
+        else:
+            direction = 0   # no key pressed → stationary
+            if self._up:
+                direction = -1
+            elif self._down:
+                direction = 1
+            self.position.y = self.position.y + self.speed * dt * direction
 
-            # Clamp to vertical display bounds
-            half_h = PADDLE_HEIGHT / 2
-            _py = self.position.y
-            if _py < half_h:
-                _py = half_h
-            if _py > LCD_HEIGHT - half_h:
-                _py = LCD_HEIGHT - half_h
-            self.position.y = _py
-        except Exception as _er:
-            print("Paddle.update", repr(_er))
+        # Clamp to vertical display bounds
+        half_h = PADDLE_HEIGHT / 2
+        _py = self.position.y
+        if _py < half_h:
+            _py = half_h
+        if _py > LCD_HEIGHT - half_h:
+            _py = LCD_HEIGHT - half_h
+        self.position.y = _py
 
 
 # ---------------------------------------------------------------------------
@@ -309,15 +267,12 @@ class Puck:
     """The ball – handles movement, bouncing, collision, and scoring."""
 
     def __init__(self, left, right):
-        try:
-            self.position = Vector()
-            self.velocity = Vector()
-            self.left = left
-            self.right = right
-            self._vel_idx = 0
-            self.reset(0)
-        except Exception as _er:
-            print("Puck.__init__", repr(_er))
+        self.position = Vector()
+        self.velocity = Vector()
+        self.left = left
+        self.right = right
+        self._vel_idx = 0
+        self.reset(0)
 
     def _next_velocity(self):
         """
@@ -327,15 +282,11 @@ class Puck:
         is needed.  The list has 50 entries; the index wraps around explicitly
         to avoid a ``%`` operation.
         """
-        try:
-            vx, vy = _PUCK_VELOCITIES[self._vel_idx]
-            self._vel_idx = self._vel_idx + 1
-            if self._vel_idx >= 50:
-                self._vel_idx = 0
-            return vx, vy
-        except Exception as _er:
-            print("Puck._next_velocity", repr(_er))
-            return 1.0, 0.0
+        vx, vy = _PUCK_VELOCITIES[self._vel_idx]
+        self._vel_idx = self._vel_idx + 1
+        if self._vel_idx >= 50:
+            self._vel_idx = 0
+        return vx, vy
 
     # -- public API --------------------------------------------------------
 
@@ -344,88 +295,69 @@ class Puck:
         Award a point then re-centre the puck.
         state > 0 → right paddle scores; state < 0 → left paddle scores.
         """
-        try:
-            if state > 0:
-                self.right.score = self.right.score + 1
-            elif state < 0:
-                self.left.score = self.left.score + 1
+        if state > 0:
+            self.right.score = self.right.score + 1
+        elif state < 0:
+            self.left.score = self.left.score + 1
 
-            self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-            _vx, _vy = self._next_velocity()
-            self.velocity.set(_vx, _vy)
-            self.velocity.set_magnitude(PUCK_START_SPEED)
-        except Exception as _er:
-            print("Puck.reset", repr(_er))
+        self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
+        _vx, _vy = self._next_velocity()
+        self.velocity.set(_vx, _vy)
+        self.velocity.set_magnitude(PUCK_START_SPEED)
 
     def update(self, dt):
-        try:
-            self.position.x = self.position.x + self.velocity.x * dt
-            self.position.y = self.position.y + self.velocity.y * dt
-            self.position._recalc()
-            self._collide()
-            self._bounce()
-            self._score()
-        except Exception as _er:
-            print("Puck.update", repr(_er))
+        self.position.x = self.position.x + self.velocity.x * dt
+        self.position.y = self.position.y + self.velocity.y * dt
+        self.position._recalc()
+        self._collide()
+        self._bounce()
+        self._score()
 
     # -- private -----------------------------------------------------------
 
     def _score(self):
         """Detect when the puck leaves the play area and award a point."""
-        try:
-            if self.position.x > LCD_WIDTH + PUCK_RADIUS:
-                self.reset(-1)   # left paddle scores
-            elif self.position.x < -PUCK_RADIUS:
-                self.reset(1)    # right paddle scores
-        except Exception as _er:
-            print("Puck._score", repr(_er))
+        if self.position.x > LCD_WIDTH + PUCK_RADIUS:
+            self.reset(-1)   # left paddle scores
+        elif self.position.x < -PUCK_RADIUS:
+            self.reset(1)    # right paddle scores
 
     def _bounce(self):
         """Reflect off the top / bottom walls."""
-        try:
-            if self.position.y < PUCK_RADIUS:
-                self.velocity.flip_y()
-            elif self.position.y > LCD_HEIGHT - PUCK_RADIUS:
-                self.velocity.flip_y()
-        except Exception as _er:
-            print("Puck._bounce", repr(_er))
+        if self.position.y < PUCK_RADIUS:
+            self.velocity.flip_y()
+        elif self.position.y > LCD_HEIGHT - PUCK_RADIUS:
+            self.velocity.flip_y()
 
     def _collide(self):
         """Deflect off either paddle using an angle-based reflection."""
-        try:
-            half_w = PADDLE_WIDTH / 2
-            half_h = PADDLE_HEIGHT / 2
+        half_w = PADDLE_WIDTH / 2
+        half_h = PADDLE_HEIGHT / 2
 
-            on_left = self.position.x - PUCK_RADIUS < self.left.position.x + half_w
-            on_right = self.position.x + PUCK_RADIUS > self.right.position.x - half_w
+        on_left = self.position.x - PUCK_RADIUS < self.left.position.x + half_w
+        on_right = self.position.x + PUCK_RADIUS > self.right.position.x - half_w
 
-            if on_left and self._between_paddle(self.left.position):
-                angle = ((self.position.y - (self.left.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
-                self.velocity.set_angle(angle)
-                self.velocity.set_magnitude(PUCK_PLAY_SPEED)
+        if on_left and self._between_paddle(self.left.position):
+            angle = ((self.position.y - (self.left.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
+            self.velocity.set_angle(angle)
+            self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
-            if on_right and self._between_paddle(self.right.position):
-                angle = ((self.position.y - (self.right.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
-                self.velocity.set_angle(angle)
-                self.velocity.flip_x()           # flip to move left
-                self.velocity.set_magnitude(PUCK_PLAY_SPEED)
-        except Exception as _er:
-            print("Puck._collide", repr(_er))
+        if on_right and self._between_paddle(self.right.position):
+            angle = ((self.position.y - (self.right.position.y - half_h)) / PADDLE_HEIGHT * math.pi / 2 - math.pi / 4)
+            self.velocity.set_angle(angle)
+            self.velocity.flip_x()           # flip to move left
+            self.velocity.set_magnitude(PUCK_PLAY_SPEED)
 
     def _between_paddle(self, paddle_pos):
         """Return True when the puck's y-range overlaps *paddle_pos*."""
-        try:
-            half_h = PADDLE_HEIGHT / 2
-            y_top = paddle_pos.y - half_h
-            y_bot = paddle_pos.y + half_h
-            if self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE <= y_top:
-                return False
-            if self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE >= y_bot:
-                return False
-            return True
-        except Exception as _er:
-            print("Puck._between_paddle", repr(_er))
+        half_h = PADDLE_HEIGHT / 2
+        y_top = paddle_pos.y - half_h
+        y_bot = paddle_pos.y + half_h
+        if self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE <= y_top:
             return False
+        if self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE >= y_bot:
+            return False
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -451,13 +383,10 @@ class Game:
     """
 
     def __init__(self):
-        try:
-            self.left  = Paddle(PADDLE_BORDER)
-            self.right = Paddle(LCD_WIDTH - PADDLE_BORDER)
-            self.puck  = Puck(self.left, self.right)
-            self._state = _STATE_SPLASH
-        except Exception as _er:
-            print("Game.__init__", repr(_er))
+        self.left  = Paddle(PADDLE_BORDER)
+        self.right = Paddle(LCD_WIDTH - PADDLE_BORDER)
+        self.puck  = Puck(self.left, self.right)
+        self._state = _STATE_SPLASH
 
     # -- public ------------------------------------------------------------
 
@@ -480,86 +409,64 @@ class Game:
         Returns an empty string ``""`` during the splash screen or after
         the game has ended.
         """
-        try:
-            if isinstance(data, str):
-                data = json.loads(data)
-            if self._state == _STATE_SPLASH:
-                return self._step_splash(data)
-            if self._state == _STATE_PLAY:
-                return self._step_play(data, dt)
-            return ""   # _STATE_QUIT
-        except Exception as _er:
-            print("Game.step", repr(_er))
-            return ""
+        if isinstance(data, str):
+            data = json.loads(data)
+        if self._state == _STATE_SPLASH:
+            return self._step_splash(data)
+        if self._state == _STATE_PLAY:
+            return self._step_play(data, dt)
+        return ""   # _STATE_QUIT
 
     # -- private -----------------------------------------------------------
 
     def _step_splash(self, data):
         """Handle one frame while the splash / mode-selection screen is shown."""
-        try:
-            if data.get("quit"):
-                self._do_quit()
-                return ""
+        if data.get("quit"):
+            self._do_quit()
+            return ""
 
-            start = data.get("start", "")
-            if start == "single":
-                self.left.is_auto = True
-                self._begin_play()
-            elif start == "multi":
-                self._begin_play()
-            # Any other (or missing) key: stay on splash.
-            return ""
-        except Exception as _er:
-            print("Game._step_splash", repr(_er))
-            return ""
+        start = data.get("start", "")
+        if start == "single":
+            self.left.is_auto = True
+            self._begin_play()
+        elif start == "multi":
+            self._begin_play()
+        # Any other (or missing) key: stay on splash.
+        return ""
 
     def _step_play(self, data, dt):
         """Handle one frame of active gameplay."""
-        try:
-            if data.get("quit"):
-                self._do_quit()
-                return ""
-
-            # Clamp dt to prevent tunnelling at large time steps
-            if dt > MAX_DT:
-                dt = MAX_DT
-
-            # Apply player input
-            self.left.set_input(data.get("player1", "none"))
-
-            self.right.set_input(data.get("player2", "none"))
-
-            # Update game state
-            self.left.update(dt, self.puck)
-            self.right.update(dt, self.puck)
-            self.puck.update(dt)
-
-            # Return game state as comma-separated string:
-            # puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
-            _px = str(int(self.puck.position.x))
-            _py = str(int(self.puck.position.y))
-            _ly = str(int(self.left.position.y))
-            _ry = str(int(self.right.position.y))
-            _ls = str(self.left.score)
-            _rs = str(self.right.score)
-            return _px + "," + _py + "," + _ly + "," + _ry + "," + _ls + "," + _rs
-        except Exception as _er:
-            print("Game._step_play", repr(_er))
+        if data.get("quit"):
+            self._do_quit()
             return ""
+
+        # Apply player input
+        self.left.set_input(data.get("player1", "none"))
+
+        self.right.set_input(data.get("player2", "none"))
+
+        # Update game state
+        self.left.update(dt, self.puck)
+        self.right.update(dt, self.puck)
+        self.puck.update(dt)
+
+        # Return game state as comma-separated string:
+        # puck_x, puck_y, p1_y, p2_y, p1_score, p2_score
+        _px = str(int(self.puck.position.x))
+        _py = str(int(self.puck.position.y))
+        _ly = str(int(self.left.position.y))
+        _ry = str(int(self.right.position.y))
+        _ls = str(self.left.score)
+        _rs = str(self.right.score)
+        return _px + "," + _py + "," + _ly + "," + _ry + "," + _ls + "," + _rs
 
     def _begin_play(self):
         """Transition from splash to active play."""
-        try:
-            self._state = _STATE_PLAY
-        except Exception as _er:
-            print("Game._begin_play", repr(_er))
+        self._state = _STATE_PLAY
 
     def _do_quit(self):
         """Mark the game as finished."""
-        try:
-            self._state = _STATE_QUIT
-        except Exception as _er:
-            print("Game._do_quit", repr(_er))
+        self._state = _STATE_QUIT
 
 
 # ---------------------------------------------------------------------------
@@ -604,8 +511,4 @@ def render_frame(data, dt):
     scheduling periodic invocations (e.g. via a MicroPython timer,
     coroutine, or ``uasyncio`` task).
     """
-    try:
-        return _game.step(data, dt)
-    except Exception as _er:
-        print("render_frame", repr(_er))
-        return ""
+    return _game.step(data, dt)
