@@ -1,8 +1,8 @@
 import math
 try:
-    import ujson as _json
+    import ujson as json
 except ImportError:
-    import json as _json
+    import json
 
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
@@ -209,8 +209,9 @@ class Puck:
             self.reset(1)
 
     def _bounce(self):
-        if (self.position.y < PUCK_RADIUS or
-                self.position.y > LCD_HEIGHT - PUCK_RADIUS):
+        if self.position.y < PUCK_RADIUS:
+            self.velocity.flip_y()
+        elif self.position.y > LCD_HEIGHT - PUCK_RADIUS:
             self.velocity.flip_y()
 
     def _collide(self):
@@ -235,8 +236,13 @@ class Puck:
 
     def _between_paddle(self, paddle_pos):
         half_h = PADDLE_HEIGHT / 2
-        return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
-                self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE < paddle_pos.y + half_h)
+        y_top = paddle_pos.y - half_h
+        y_bot = paddle_pos.y + half_h
+        if self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE <= y_top:
+            return False
+        if self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE >= y_bot:
+            return False
+        return True
 
 _STATE_SPLASH = 0
 _STATE_PLAY   = 1
@@ -252,7 +258,7 @@ class Game:
 
     def step(self, data, dt):
         if isinstance(data, str):
-            data = _json.loads(data)
+            data = json.loads(data)
         if self._state == _STATE_SPLASH:
             return self._step_splash(data)
         if self._state == _STATE_PLAY:

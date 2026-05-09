@@ -33,7 +33,10 @@ Return value
 """
 
 import math
-import json
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -324,8 +327,9 @@ class Puck:
 
     def _bounce(self):
         """Reflect off the top / bottom walls."""
-        if (self.position.y < PUCK_RADIUS or
-                self.position.y > LCD_HEIGHT - PUCK_RADIUS):
+        if self.position.y < PUCK_RADIUS:
+            self.velocity.flip_y()
+        elif self.position.y > LCD_HEIGHT - PUCK_RADIUS:
             self.velocity.flip_y()
 
     def _collide(self):
@@ -352,8 +356,13 @@ class Puck:
     def _between_paddle(self, paddle_pos):
         """Return True when the puck's y-range overlaps *paddle_pos*."""
         half_h = PADDLE_HEIGHT / 2
-        return (self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE > paddle_pos.y - half_h and
-                self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE < paddle_pos.y + half_h)
+        y_top = paddle_pos.y - half_h
+        y_bot = paddle_pos.y + half_h
+        if self.position.y + PUCK_RADIUS + COLLISION_TOLERANCE <= y_top:
+            return False
+        if self.position.y - PUCK_RADIUS - COLLISION_TOLERANCE >= y_bot:
+            return False
+        return True
 
 
 # ---------------------------------------------------------------------------
