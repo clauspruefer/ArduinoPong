@@ -33,10 +33,7 @@ Return value
 """
 
 import math
-try:
-    import ujson as _json
-except ImportError:
-    import json as _json
+import json
 
 # ---------------------------------------------------------------------------
 # Display / game-field constants
@@ -409,7 +406,7 @@ class Game:
         the game has ended.
         """
         if isinstance(data, str):
-            data = _json.loads(data)
+            data = json.loads(data)
         if self._state == _STATE_SPLASH:
             return self._step_splash(data)
         if self._state == _STATE_PLAY:
