@@ -86,6 +86,7 @@ def _sign(val):
         return 0
     except Exception as _er:
         print("_sign", repr(_er))
+        return 0
 
 
 # Pre-calculated launch velocities – 50 entries, generated offline.
@@ -182,6 +183,7 @@ class Vector:
             return self
         except Exception as _er:
             print("Vector.set", repr(_er))
+            return self
 
     def set_magnitude(self, mag):
         """Scale the vector so its length equals *mag*."""
@@ -194,6 +196,7 @@ class Vector:
             return self
         except Exception as _er:
             print("Vector.set_magnitude", repr(_er))
+            return self
 
     def set_angle(self, angle):
         """Rotate the vector to *angle* radians (keeping current magnitude)."""
@@ -204,6 +207,7 @@ class Vector:
             return self
         except Exception as _er:
             print("Vector.set_angle", repr(_er))
+            return self
 
     def flip_y(self):
         """Negate the y component and update magnitude / angle."""
@@ -213,6 +217,7 @@ class Vector:
             return self
         except Exception as _er:
             print("Vector.flip_y", repr(_er))
+            return self
 
     def flip_x(self):
         """Negate the x component and update magnitude / angle."""
@@ -222,6 +227,7 @@ class Vector:
             return self
         except Exception as _er:
             print("Vector.flip_x", repr(_er))
+            return self
 
 
 # ---------------------------------------------------------------------------
