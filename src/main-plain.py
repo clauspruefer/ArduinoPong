@@ -105,8 +105,8 @@ class Vector:
     def set_magnitude(self, mag):
         if self.magnitude:
             scale = float(mag) / self.magnitude
-            self.x *= scale
-            self.y *= scale
+            self.x = self.x * scale
+            self.y = self.y * scale
         self.magnitude = float(mag)
         return self
 
@@ -117,12 +117,12 @@ class Vector:
         return self
 
     def flip_y(self):
-        self.y *= -1
+        self.y = 0.0 - self.y
         self._recalc()
         return self
 
     def flip_x(self):
-        self.x *= -1
+        self.x = 0.0 - self.x
         self._recalc()
         return self
 
