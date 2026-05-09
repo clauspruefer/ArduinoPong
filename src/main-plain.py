@@ -28,12 +28,6 @@ def _sign(val):
         return -1
     return 0
 
-def _random_puck_velocity():
-    global _PUCK_VEL_IDX
-    vx, vy = _PUCK_VELOCITIES[_PUCK_VEL_IDX % len(_PUCK_VELOCITIES)]
-    _PUCK_VEL_IDX += 1
-    return vx, vy
-
 _PUCK_VELOCITIES = [
     ( 0.299777,  0.278854),
     (-0.723800, -0.510216),
@@ -86,7 +80,6 @@ _PUCK_VELOCITIES = [
     (-0.316027, -0.123800),
     (-0.601032, -0.504189),
 ]
-_PUCK_VEL_IDX = 0
 
 class Vector:
 
@@ -181,7 +174,15 @@ class Puck:
         self.velocity = Vector()
         self.left = left
         self.right = right
+        self._vel_idx = 0
         self.reset(0)
+
+    def _next_velocity(self):
+        vx, vy = _PUCK_VELOCITIES[self._vel_idx]
+        self._vel_idx = self._vel_idx + 1
+        if self._vel_idx >= 50:
+            self._vel_idx = 0
+        return vx, vy
 
     def reset(self, state):
         if state > 0:
@@ -190,7 +191,7 @@ class Puck:
             self.left.score += 1
 
         self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-        _vx, _vy = _random_puck_velocity()
+        _vx, _vy = self._next_velocity()
         self.velocity.set(_vx, _vy)
         self.velocity.set_magnitude(PUCK_START_SPEED)
 

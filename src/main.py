@@ -85,25 +85,6 @@ def _sign(val):
     return 0
 
 
-def _random_puck_velocity():
-    """
-    Return the next (vx, vy) launch direction for the puck after a reset.
-
-    Instead of runtime random calls, the function cycles through a fixed
-    list of 50 pre-calculated velocity pairs.  This removes the dependency
-    on the ``random`` module entirely, which saves RAM and avoids the cost
-    of seeding an RNG on resource-constrained embedded targets.
-
-    The values were generated offline with the same formula that was used
-    previously (vy ∈ [-1, 1], vx scaled by a factor in [1, 4] with an
-    alternating sign) so the launch directions are well-distributed.
-    """
-    global _PUCK_VEL_IDX
-    vx, vy = _PUCK_VELOCITIES[_PUCK_VEL_IDX % len(_PUCK_VELOCITIES)]
-    _PUCK_VEL_IDX += 1
-    return vx, vy
-
-
 # Pre-calculated launch velocities – 50 entries, generated offline.
 # Each tuple is (vx, vy); the caller normalises the speed afterwards.
 _PUCK_VELOCITIES = [
@@ -158,7 +139,6 @@ _PUCK_VELOCITIES = [
     (-0.316027, -0.123800),
     (-0.601032, -0.504189),
 ]
-_PUCK_VEL_IDX = 0
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +269,22 @@ class Puck:
         self.velocity = Vector()
         self.left = left
         self.right = right
+        self._vel_idx = 0
         self.reset(0)
+
+    def _next_velocity(self):
+        """
+        Return the next (vx, vy) launch direction from the pre-calculated list.
+
+        The index is stored as an instance variable so no module-level global
+        is needed.  The list has 50 entries; the index wraps around explicitly
+        to avoid a ``%`` operation.
+        """
+        vx, vy = _PUCK_VELOCITIES[self._vel_idx]
+        self._vel_idx = self._vel_idx + 1
+        if self._vel_idx >= 50:
+            self._vel_idx = 0
+        return vx, vy
 
     # -- public API --------------------------------------------------------
 
@@ -304,7 +299,7 @@ class Puck:
             self.left.score += 1
 
         self.position.set(LCD_WIDTH / 2, LCD_HEIGHT / 2)
-        _vx, _vy = _random_puck_velocity()
+        _vx, _vy = self._next_velocity()
         self.velocity.set(_vx, _vy)
         self.velocity.set_magnitude(PUCK_START_SPEED)
 
