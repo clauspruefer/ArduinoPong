@@ -13,6 +13,12 @@
  *       p1_score        – left  player score
  *       p2_score        – right player score
  *
+ *   render_pong_frame_str(s)
+ *     Convenience wrapper: parses the comma-separated string returned by
+ *     MicroPython's render_frame() — e.g. "68,36,44,32,0,0" — and calls
+ *     render_pong_frame() with the resulting six integer values.
+ *     Returns 1 on success, 0 if the string is malformed.
+ *
  * Example loop (1000 frames, 50 ms delay):
  *   #include "render_pong_frame.h"
  *   ...
@@ -27,6 +33,7 @@
 #define RENDER_PONG_FRAME_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -179,6 +186,43 @@ static void render_pong_frame(int puck_x, int puck_y,
     puts("+");
 
     fflush(stdout);
+}
+
+/*
+ * render_pong_frame_str
+ * ---------------------
+ * Parse a comma-separated frame string as returned by MicroPython's
+ * render_frame() and render one game frame.
+ *
+ * Expected format: "puck_x,puck_y,p1_y,p2_y,p1_score,p2_score"
+ * Example:         "68,36,44,32,0,0"
+ *
+ * Returns 1 on success, 0 if the string does not contain exactly six
+ * comma-separated integer fields.
+ */
+static int render_pong_frame_str(const char *s)
+{
+    int   vals[6];
+    int   n;
+    char *end;
+
+    if (s == NULL) return 0;
+
+    for (n = 0; n < 6; n++) {
+        if (*s == '\0') return 0;
+        vals[n] = (int)strtol(s, &end, 10);
+        if (end == s) return 0;      /* no digits found at this position */
+        s = end;
+        if (n < 5) {
+            if (*s != ',') return 0; /* expected comma delimiter */
+            s++;                     /* skip ',' */
+        }
+    }
+
+    if (*s != '\0') return 0;        /* trailing garbage */
+
+    render_pong_frame(vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
+    return 1;
 }
 
 /*
