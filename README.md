@@ -1,3 +1,7 @@
+# PONG for MicroPython (Rendering Engine)
+
+A small PONG GAME rendering engine especially suitable for MycroPython based microcontrollers.
+
 # Pong84
 
 Pong for the TI-84 Plus CE.
