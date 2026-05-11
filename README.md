@@ -2,6 +2,9 @@
 
 A small PONG GAME rendering engine especially suitable for MycroPython based microcontrollers.
 
+Concrete cross-compile instructions see:
+https://github.com/clauspruefer/micropython/tree/v1.26-release/examples/embedding-pong.
+
 # Pong84
 
 Pong for the TI-84 Plus CE.
